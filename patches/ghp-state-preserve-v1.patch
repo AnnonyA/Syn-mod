@@ -1,14 +1,14 @@
 diff --git a/saveinstance.luau b/saveinstance.luau
 --- a/saveinstance.luau
 +++ b/saveinstance.luau
-@@ -5308,7 +5308,8 @@
+@@ -5308,5 +5308,6 @@
  	local GHP_STATE_FILE = USSI_FOLDER .. "GHP_STATE.json"
  	local GHPDatatypeState = {}
 +	local GHPStateStore = {}
  	local GHPPersisted = {}
  	local GHPVersionKey
  	local GHPShadowed = true -- true when ghp returns the shadowed (parent) property value instead of the shadow
-@@ -5330,8 +5331,11 @@
+@@ -5330,9 +5331,12 @@
  		if readfile then
  			local ok, decoded = pcall(function()
  				return service.HttpService:JSONDecode(readfile(GHP_STATE_FILE))
