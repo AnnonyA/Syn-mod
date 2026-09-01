@@ -1,7 +1,7 @@
 diff --git a/saveinstance.luau b/saveinstance.luau
 --- a/saveinstance.luau
 +++ b/saveinstance.luau
-@@ -6311,13 +6311,26 @@
+@@ -6311,12 +6311,23 @@
  			if readfile and checks.fileExists ~= false then
  				local ok, contents = pcall(readfile, placename)
  				checks.fileReadable = ok and type(contents) == "string"
