@@ -1,7 +1,7 @@
 diff --git a/saveinstance.luau b/saveinstance.luau
 --- a/saveinstance.luau
 +++ b/saveinstance.luau
-@@ -178,8 +178,22 @@ local function identifyExecutorSafe()
+@@ -178,7 +178,23 @@ local function identifyExecutorSafe()
  	end
  
  	local ok, name, version = pcall(identify_executor)
