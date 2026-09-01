@@ -6342,6 +6342,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		local valid = checks.nonEmpty and checks.chunkSizeMatches and checks.formatEnvelope
 
 		if fileTarget then
+			checks.fileWritable = writefile ~= nil
+			valid = valid and checks.fileWritable
 			if isfile then
 				local ok, exists = pcall(isfile, placename)
 				if ok then
