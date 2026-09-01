@@ -49,6 +49,9 @@ require('checkpoint before risky read', 'resumeBeforeRiskyRead(instance, Propert
 require('checkpoint after risky read', 'resumeAfterRiskyRead()' in SOURCE)
 require('resume file probe protected', 'pcall(isfile, ResumeFile)' in SOURCE)
 
+# Validation report persistence should surface executor write failures instead of silently ignoring them.
+require('validation file write failure warning', 'Validation report write failed.' in SOURCE)
+
 # gethiddenproperty compatibility state should preserve profiles for other executor/client versions.
 require('GHP state store', 'local GHPStateStore = {}' in SOURCE)
 require('GHP state store loads decoded profiles', 'GHPStateStore = decoded' in SOURCE)
