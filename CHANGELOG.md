@@ -2,6 +2,21 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Validation read-back fallback
+
+### Validation and executor compatibility
+
+- Post-save validation no longer treats an exception from `isfile(outputFile)` as proof that the saved file is missing.
+- When `isfile` errors but `readfile` is available, validation continues with the protected read-back and lets readability, byte-size, and envelope checks determine the result.
+- A successful `isfile` result of `false` still marks the output as missing and invalid.
+- The serialized output formats, options, and public saveinstance API are unchanged. No performance improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically at the read-back fallback requirement.
+- Added the focused validation fallback patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Validation report write warning
 
 ### Validation diagnostics
