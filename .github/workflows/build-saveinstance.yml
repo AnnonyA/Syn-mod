@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - modifications.patch
+      - patches/**
+      - tests/**
+      - scripts/**
       - .github/workflows/build-saveinstance.yml
   workflow_dispatch:
 
@@ -34,23 +37,44 @@ jobs:
             exit 1
           fi
 
-      - name: Apply Syn-mod experimental patch
+      - name: Apply Syn-mod patch set
         shell: bash
         run: |
           set -euo pipefail
           git apply --check modifications.patch
           git apply modifications.patch
+          git apply --check patches/recovery-v2.patch
+          git apply patches/recovery-v2.patch
 
-      - name: Verify attribution and experimental features
+      - name: Run regression checks
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq "Upstream/source: UniversalSynSaveInstance" saveinstance.luau
-          grep -Fq "SpecialProperties = \"all\"" saveinstance.luau
-          grep -Fq "ResumeOnCrash = false" saveinstance.luau
-          grep -Fq "local function validateOptionValue" saveinstance.luau
-          grep -Fq "local function applyModePresets" saveinstance.luau
-          grep -Fq "// 4294967296" saveinstance.luau
+          python tests/test_mod_features.py
+          python scripts/verify_build.py
+
+      - name: Build pinned Luau compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/luau-lang/luau.git /tmp/luau
+          git -C /tmp/luau checkout --quiet 46d5dbaa17865e0c97da1f14b3e35ad7b6bfcb37
+          cmake -S /tmp/luau -B /tmp/luau/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLUAU_BUILD_CLI=ON \
+            -DLUAU_BUILD_TESTS=OFF
+          cmake --build /tmp/luau/build --target Luau.Compile.CLI --parallel 2
+
+      - name: Compile generated Luau
+        shell: bash
+        run: |
+          set -euo pipefail
+          compiler="$(find /tmp/luau/build -type f -name 'luau-compile' -perm -111 | head -n 1)"
+          if [ -z "$compiler" ]; then
+            echo "luau-compile was not produced" >&2
+            exit 1
+          fi
+          "$compiler" saveinstance.luau >/dev/null
 
       - name: Commit generated build
         shell: bash
