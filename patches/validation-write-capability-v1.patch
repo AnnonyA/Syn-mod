@@ -1,12 +1,12 @@
 diff --git a/saveinstance.luau b/saveinstance.luau
 --- a/saveinstance.luau
 +++ b/saveinstance.luau
-@@ -6361,6 +6361,8 @@
- 		local fileTarget = not CopyToClipboard and not Callback
- 		checks.fileTarget = fileTarget
+@@ -6363,6 +6363,8 @@
  		local valid = checks.nonEmpty and checks.chunkSizeMatches and checks.formatEnvelope
-+		checks.fileWritable = not fileTarget or writefile ~= nil
-+		valid = valid and checks.fileWritable
  
  		if fileTarget then
++			checks.fileWritable = writefile ~= nil
++			valid = valid and checks.fileWritable
  			if isfile then
+ 				local ok, exists = pcall(isfile, placename)
+ 				if ok then
