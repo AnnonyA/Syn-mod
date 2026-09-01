@@ -1,7 +1,7 @@
 diff --git a/saveinstance.luau b/saveinstance.luau
 --- a/saveinstance.luau
 +++ b/saveinstance.luau
-@@ -6190,9 +6190,18 @@
+@@ -6190,7 +6190,16 @@
  		do
  			local tmp = { "<SharedStrings>" }
 +			local sharedStringEntries = {}
