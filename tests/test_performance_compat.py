@@ -31,6 +31,11 @@ require('decompile failure counter', 'decompileFailed' in SOURCE)
 require('decompile cache stores successes only', 'if ScriptCache and bytecode and ok then' in SOURCE)
 require('instance counter', 'instancesCollected' in SOURCE)
 require('output bytes metric', 'outputBytes' in SOURCE)
+require(
+    'metrics file JSON encoding is protected',
+    'pcall(service.HttpService.JSONEncode, service.HttpService, MetricsReport)' in SOURCE
+    and 'pcall(writefile, metricsFile, service.HttpService:JSONEncode(MetricsReport))' not in SOURCE,
+)
 
 # Recovery hot-path optimization: cache paths and avoid rebuilding keys twice.
 require('instance path cache', 'ResumePathCache = ResumeEnabled and setmetatable({}, { __mode = "k" }) or nil' in SOURCE)
