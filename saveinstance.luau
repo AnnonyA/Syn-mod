@@ -114,6 +114,22 @@ local function identifyExecutorSafe()
 
 	local ok, name, version = pcall(identify_executor)
 	if ok then
+		if name ~= nil and type(name) ~= "string" then
+			local converted, value = pcall(tostring, name)
+			if converted then
+				name = value
+			else
+				name = nil
+			end
+		end
+		if version ~= nil and type(version) ~= "string" then
+			local converted, value = pcall(tostring, version)
+			if converted then
+				version = value
+			else
+				version = nil
+			end
+		end
 		return name, version
 	end
 end
