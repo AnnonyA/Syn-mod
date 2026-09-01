@@ -3600,8 +3600,10 @@ end
 --- @field IgnorePropertiesOfNotScriptsOnScriptsMode boolean -- Ignores property of every instance that is not a script in "scripts" mode. ___Default:___ false
 --- @field IgnoreSpecialProperties boolean -- Prevents calls to `gethiddenproperty` and uses fallback methods instead. This also helps with crashes. If your file is corrupted after saving, you can try turning this on. ___Default:___ false
 --- @field SpecialProperties {boolean|string|table} -- Selects which API-dump properties marked as Special are saved. `"all"`/true preserves the old behavior, `"none"`/false skips all Special properties, a string saves one property name, and a table can contain global property names plus class-specific lists such as `{ "AttributesSerialize", MeshPart = { "PhysicsData" } }`. This is independent from IgnoreSpecialProperties: this option chooses *what* to save, while IgnoreSpecialProperties chooses *how* special values are read. ___Default:___ `"all"`
---- @field ResumeOnCrash boolean -- Enables durable crash recovery checkpoints for risky property reads. If a prior run ended while reading a property, the next run starts a fresh serialization and skips that exact ClassName/PropertyName crash point instead of repeatedly crashing. Works with XML and Binary because it never tries to append to a half-built serializer state. ___Default:___ false
+--- @field ResumeOnCrash boolean -- Enables durable crash recovery checkpoints for risky property reads. If a prior run ended while reading a property, the next run starts a fresh serialization and skips the learned crash point instead of repeatedly crashing. Works with XML and Binary because it never tries to append to a half-built serializer state. ___Default:___ false
 --- @field ResumeFile {boolean|string} -- Optional checkpoint JSON path used by ResumeOnCrash. `false` chooses a per-place default file in the executor workspace. ___Default:___ false
+--- @field ResumeScope string -- Controls how learned crash points are matched. `"instance"` skips only the same instance path + class + property; `"class"` skips that property for every instance of the class. ___Default:___ `"instance"`
+--- @field ResumeMaxSkips number -- Maximum learned crash points kept in the checkpoint. Oldest entries are discarded first to keep recovery state bounded. ___Default:___ 256
 --- @field ClearResumeState boolean -- Clears learned crash-skip points at the start of this run before ResumeOnCrash begins tracking again. ___Default:___ false
 --- @field IsolateStarterPlayer boolean -- Saves StarterPlayer as separate folder, children of the original instance will be ignored. ___Default:___ false
 --- @field IsolatePlayers boolean -- Saves All Players as separate folder, children of the original instance will be ignored. ___Default:___ false
@@ -3741,6 +3743,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		ResumeOnCrash = false,
 		ResumeFile = false,
+		ResumeScope = "instance",
+		ResumeMaxSkips = 256,
 		ClearResumeState = false,
 
 		IsolateLocalPlayer = false, --  #service.StarterGui:GetChildren() == 0
@@ -3864,6 +3868,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			error("Object must be false or an Instance", 3)
 		elseif option == "ResumeFile" and value ~= false and valueType ~= "string" then
 			error("ResumeFile must be false or a string", 3)
+		elseif option == "ResumeScope" and value ~= "instance" and value ~= "class" then
+			error('ResumeScope must be "instance" or "class"', 3)
+		elseif option == "ResumeMaxSkips" and (value < 1 or value % 1 ~= 0) then
+			error("ResumeMaxSkips must be a positive integer", 3)
 		elseif option == "CompressionMode" and valueType == "string" and value ~= "zstd" and value ~= "lz4" then
 			error('CompressionMode string must be "zstd" or "lz4"', 3)
 		elseif option == "CompressionLevel" and (value < -7 or value > 22) then
@@ -4424,9 +4432,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	end
 
 	-- Clean-restart crash recovery: checkpoint only risky hidden-property reads.
-	-- On a hard crash, the next run learns that exact class/property and skips it.
+	-- On a hard crash, the next run learns the configured recovery key and skips it.
 	local ResumeEnabled = OPTIONS.ResumeOnCrash and writefile ~= nil and readfile ~= nil and isfile ~= nil
 	local ResumeFile = OPTIONS.ResumeFile
+	local ResumeScope = OPTIONS.ResumeScope
+	local ResumeMaxSkips = OPTIONS.ResumeMaxSkips
 	if ResumeFile == false then
 		ResumeFile = "USSI_resume_" .. tostring(game.PlaceId) .. ".json"
 	end
@@ -4434,13 +4444,27 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local ResumeIdentity = table.concat({
 		tostring(game.PlaceId),
 		tostring(OPTIONS.mode),
+		tostring(ResumeScope),
 		Object and Object:GetFullName() or "game",
 	}, "|")
 	local ResumeState
 	local ResumeSkipMap = {}
 
-	local function resumePointKey(className, propertyName)
-		return className .. "\0" .. propertyName
+	local function resumeInstancePath(instance)
+		local ok, path = pcall(instance.GetFullName, instance)
+		if ok and type(path) == "string" then
+			return path
+		end
+
+		return instance.ClassName .. ":" .. instance.Name
+	end
+
+	local function resumePointKey(className, propertyName, instancePath)
+		local key = className .. "\0" .. propertyName
+		if ResumeScope == "instance" then
+			key ..= "\0" .. tostring(instancePath or "")
+		end
+		return key
 	end
 
 	local function persistResumeState()
@@ -4469,7 +4493,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		if previous and previous.status == "reading" and type(previous.current) == "table" then
 			local current = previous.current
 			if current.class and current.property then
-				local key = resumePointKey(current.class, current.property)
+				local key = resumePointKey(current.class, current.property, current.instance)
 				local exists = false
 				for _, point in skipped do
 					if point.key == key then
@@ -4478,9 +4502,19 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 					end
 				end
 				if not exists then
-					skipped[#skipped + 1] = { key = key, class = current.class, property = current.property, valueType = current.valueType }
+					skipped[#skipped + 1] = {
+						key = key,
+						class = current.class,
+						property = current.property,
+						valueType = current.valueType,
+						instance = current.instance,
+					}
 				end
 			end
+		end
+
+		while #skipped > ResumeMaxSkips do
+			table.remove(skipped, 1)
 		end
 
 		for _, point in skipped do
@@ -4490,22 +4524,24 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 
 		ResumeState = {
-			version = 1, identity = ResumeIdentity, targetFile = placename,
+			version = 2, identity = ResumeIdentity, scope = ResumeScope, targetFile = placename,
 			status = "resuming", current = nil, skipped = skipped, updatedAt = os.time(),
 		}
 		persistResumeState()
 	end
 
 	local function resumeShouldSkip(instance, propertyName)
-		return ResumeEnabled and ResumeSkipMap[resumePointKey(instance.ClassName, propertyName)] == true
+		return ResumeEnabled
+			and ResumeSkipMap[resumePointKey(instance.ClassName, propertyName, resumeInstancePath(instance))] == true
 	end
 
 	local function resumeBeforeRiskyRead(instance, propertyName, valueType)
 		if not ResumeEnabled then return end
+		local instancePath = resumeInstancePath(instance)
 		ResumeState.status = "reading"
 		ResumeState.current = {
-			key = resumePointKey(instance.ClassName, propertyName), class = instance.ClassName,
-			property = propertyName, valueType = valueType, instance = instance:GetFullName(),
+			key = resumePointKey(instance.ClassName, propertyName, instancePath), class = instance.ClassName,
+			property = propertyName, valueType = valueType, instance = instancePath,
 		}
 		ResumeState.updatedAt = os.time()
 		persistResumeState()
