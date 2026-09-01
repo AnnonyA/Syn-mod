@@ -47,6 +47,7 @@ require(
 require('class scope available', 'if ResumeScope == "instance" then' in SOURCE)
 require('checkpoint before risky read', 'resumeBeforeRiskyRead(instance, PropertyName, ValueType)' in SOURCE)
 require('checkpoint after risky read', 'resumeAfterRiskyRead()' in SOURCE)
+require('resume file probe protected', 'pcall(isfile, ResumeFile)' in SOURCE)
 
 # gethiddenproperty compatibility state should preserve profiles for other executor/client versions.
 require('GHP state store', 'local GHPStateStore = {}' in SOURCE)
