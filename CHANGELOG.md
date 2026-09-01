@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Executor metadata normalization
+
+### Executor compatibility
+
+- Non-string executor names or versions returned by `identifyexecutor`, `getexecutorname`, or `whatexecutor` are now normalized before they reach README formatting or persisted GHP compatibility keys.
+- Metadata conversion is itself protected; if an unusual value cannot be converted safely, Syn-mod falls back to its existing unknown/empty metadata behavior instead of aborting the save.
+- Normal string metadata, serialized output formats, options, and the public saveinstance API are unchanged. No performance improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because executor metadata was not normalized.
+- Added a focused normalization patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — README executor identification guard
 
 ### Executor compatibility
