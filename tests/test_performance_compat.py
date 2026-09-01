@@ -51,6 +51,7 @@ require('getscriptbytecode capability', 'local hasGetScriptBytecode = getscriptb
 require(
     'executor identification is protected',
     'pcall(identify_executor)' in SOURCE
+    and 'identify_executor()' not in SOURCE
     and 'identify_executor and identify_executor()' not in SOURCE
     and 'execName, execVersion = identify_executor()' not in SOURCE,
 )
