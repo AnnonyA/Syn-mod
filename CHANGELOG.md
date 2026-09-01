@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Metrics file encoding guard
+
+### Metrics integration reliability
+
+- `MetricsFile` JSON encoding is now protected before the report is handed to `writefile`.
+- If a `MetricsCallback` mutates the report into a value that `HttpService:JSONEncode` cannot serialize, metrics persistence is skipped instead of turning an otherwise completed save into an exception.
+- Normal serializable metrics reports, saved place/model output, options, and the public saveinstance API are unchanged. No performance or fidelity improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because metrics JSON encoding was unprotected.
+- Added a focused metrics persistence patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Executor metadata normalization
 
 ### Executor compatibility
