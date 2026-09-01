@@ -82,6 +82,10 @@ require('validation chunk size check', 'chunkSizeMatches' in SOURCE)
 require('validation envelope check', 'formatEnvelope' in SOURCE)
 require('validation file existence check', 'fileExists' in SOURCE)
 require(
+    'validation file target requires write capability',
+    'checks.fileWritable = writefile ~= nil' in SOURCE and 'valid = valid and checks.fileWritable' in SOURCE,
+)
+require(
     'validation failed isfile probe does not block readback',
     'checks.fileExists = exists == true' in SOURCE and 'checks.fileExists = ok and exists == true' not in SOURCE,
 )
