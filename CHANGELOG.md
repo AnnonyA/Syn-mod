@@ -2,6 +2,32 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Benchmark v2 and deeper observability
+
+### Fairer benchmark measurements
+
+- Upgraded the benchmark report to schema version 2.
+- Increased the default measured run count to four so alternating execution order is balanced.
+- Added configurable warmup runs and cooldown spacing.
+- Added median, minimum, maximum, average, and standard-deviation summaries.
+- Added paired elapsed ratios/percentage deltas and paired output-byte deltas.
+- Added executor metadata and completion-rate reporting.
+- Disabled Syn-mod Metrics during measured timing runs so instrumentation does not bias upstream-vs-Syn-mod timing.
+- Added a separate optional Syn-mod diagnostic run with Metrics enabled; it is excluded from comparison statistics.
+
+### Observability and hot paths
+
+- Split compression and output-join time out of broader serialization/write stages.
+- Added compression attempted/used/rejected counts plus input/output byte totals.
+- Added output-join call and byte counters.
+- Made compatibility reporting lazy: when Metrics is disabled no compatibility-report table is allocated.
+- Added a zero-work fast path for `Compatibility = "off"` when Metrics is also disabled.
+
+### Verification
+
+- Added benchmark-v2/fairness regression checks.
+- CI applies the benchmark-observability patch after the existing ordered patch set and compiles the benchmark with the pinned Luau compiler.
+
 ## 2026-09-01 — Metrics, benchmark, and compatibility
 
 ### Observability

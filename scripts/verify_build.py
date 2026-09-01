@@ -16,7 +16,7 @@ check('module return preserved', re.search(r'\breturn\s+synsaveinstance\b', sour
 check('substantial generated source', len(source) > 180_000 and source.count('\n') > 6500)
 check('upstream attribution preserved', 'Upstream/source: UniversalSynSaveInstance' in source)
 check('new recovery v2 present', 'version = 2' in source and 'ResumeScope = "instance"' in source)
-check('metrics present', 'schemaVersion = 1' in source and 'Metrics = false' in source)
+check('metrics present', 'schemaVersion = 2' in source and 'Metrics = false' in source)
 check('compatibility profile present', 'Compatibility = "auto"' in source and 'applyCompatibilityProfile' in source)
 check('benchmark source present', (ROOT / 'bench' / 'compare.luau').is_file())
 

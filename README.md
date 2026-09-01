@@ -30,9 +30,9 @@ The current experimental build includes:
 - optional class-scoped recovery through `ResumeScope = "class"`
 - bounded recovery history through `ResumeMaxSkips`
 - opt-in structured metrics for timing, output size, property/decompile activity, and observable memory deltas
-- a reproducible `upstream vs Syn-mod` benchmark harness with alternating run order
+- a reproducible `upstream vs Syn-mod` benchmark harness with balanced alternating order, paired deltas, medians, and variability reporting
 - automatic executor capability profiling and conservative compatibility fallbacks
-- recovery path caching and disabled-by-default instrumentation fast paths
+- recovery path caching, lazy compatibility reporting, and disabled-by-default instrumentation fast paths
 - safe uses of Luau floor division for integer 64-bit split operations
 - `table.clone` where a real shallow copy is required
 - reproducible patch-based builds from a pinned upstream blob
@@ -81,7 +81,7 @@ saveinstance({
 })
 ```
 
-The report includes stage timings, collected-instance counts, property read/serialization counters, decompiler activity, output bytes, recovery skips, the selected compatibility profile, and `gcinfo()` start/end/delta values when that API is available. The memory values are observations, not peak-memory measurements.
+The report includes stage timings for collection, serialization, compression, output joining, writing, and aggregate decompilation time; collected-instance counts; property read/serialization counters; compression attempt/use/rejection counters and byte totals; output-join counts/bytes; decompiler activity; output bytes; recovery skips; the selected compatibility profile; and `gcinfo()` start/end/delta values when that API is available. The memory values are observations, not peak-memory measurements.
 
 ## Compatibility profiles
 
@@ -91,9 +91,9 @@ Use `Compatibility = "strict"` when you prefer an error instead of an automatic 
 
 ## Benchmarking against upstream
 
-`bench/compare.luau` loads the pinned UniversalSynSaveInstance source and the current Syn-mod build, runs them against the same client-visible state, alternates which implementation runs first, and writes `synmod_benchmark.json` plus `synmod_benchmark.txt` when `writefile` is available.
+`bench/compare.luau` loads the pinned UniversalSynSaveInstance source and the current Syn-mod build, runs them against the same client-visible state, alternates which implementation runs first, and writes `synmod_benchmark.json` plus `synmod_benchmark.txt` when `writefile` is available. Benchmark schema v2 reports per-implementation distributions (average, median, min, max, standard deviation), paired elapsed ratios/percentage deltas, paired output-size deltas, completion rates, executor metadata, optional warmups, and cooldown spacing.
 
-The default benchmark disables decompilation to focus on the save/serialization path. Override `getgenv().SYNMOD_BENCHMARK_CONFIG` before running it if you want another profile. Results contain measurements only; timing alone is not treated as proof that one implementation is more correct.
+Measured upstream/Syn-mod timing runs keep Syn-mod Metrics disabled so instrumentation does not bias the comparison. By default, one separate Syn-mod diagnostic save is collected afterward with Metrics enabled; it is stored in `synmodDiagnostics` and excluded from the timing comparison. The default benchmark disables decompilation to focus on the save/serialization path. Override `getgenv().SYNMOD_BENCHMARK_CONFIG` before running it if you want another profile. Results contain measurements only; timing alone is not treated as proof that one implementation is more correct.
 
 ## Repository layout
 
@@ -101,9 +101,11 @@ The default benchmark disables decompilation to focus on the save/serialization 
 - `modifications.patch` — the base Syn-mod changes applied to the pinned upstream file.
 - `patches/recovery-v2.patch` — focused Recovery v2 improvements applied after the base patch.
 - `patches/performance-compat-v1/` — ordered patches for metrics, hot-path recovery caching, and compatibility profiling.
+- `patches/benchmark-observability-v2.patch` — benchmark fairness/statistics, compression/join observability, and compatibility-off fast-path improvements.
 - `bench/compare.luau` — executor-side comparison harness for pinned upstream versus Syn-mod.
 - `tests/test_mod_features.py` — base feature/recovery regression checks.
 - `tests/test_performance_compat.py` — metrics, benchmark, hot-path, and compatibility regression checks.
+- `tests/test_benchmark_v2.py` — benchmark-v2 fairness/statistics and observability regression checks.
 - `scripts/verify_build.py` — generated-build structural verification.
 - `.github/workflows/build-saveinstance.yml` — reproducible build and verification workflow.
 - `CHANGELOG.md` — user-facing history of Syn-mod changes.

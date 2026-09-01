@@ -50,6 +50,8 @@ jobs:
             git apply --check "$patch"
             git apply "$patch"
           done
+          git apply --check patches/benchmark-observability-v2.patch
+          git apply patches/benchmark-observability-v2.patch
 
       - name: Run regression checks
         shell: bash
@@ -57,6 +59,7 @@ jobs:
           set -euo pipefail
           python tests/test_mod_features.py
           python tests/test_performance_compat.py
+          python tests/test_benchmark_v2.py
           python scripts/verify_build.py
 
       - name: Build pinned Luau compiler
