@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Deterministic XML SharedStrings
+
+### Determinism
+
+- XML output now collects shared-string entries and sorts them by their generated shared-string id before writing the `<SharedStrings>` section.
+- Removed dependence on Luau table iteration order for that XML section while preserving each existing id/value association and the serialized XML format.
+- No performance improvement is claimed; this change is specifically about repeatable ordering for equivalent serializer state.
+
+### Verification
+
+- Added the regression contract first and confirmed it failed on the previous generated build.
+- Added the focused deterministic SharedStrings patch to the pinned-upstream reconstruction chain.
+- Verified clean patch application, the full regression suite, and pinned Luau compilation before publishing the generated build.
+
 ## 2026-09-01 — GHP compatibility state preservation
 
 ### Reliability
