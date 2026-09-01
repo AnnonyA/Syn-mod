@@ -95,6 +95,14 @@ Use `Compatibility = "strict"` when you prefer an error instead of an automatic 
 
 Measured upstream/Syn-mod timing runs keep Syn-mod Metrics disabled so instrumentation does not bias the comparison. By default, one separate Syn-mod diagnostic save is collected afterward with Metrics enabled; it is stored in `synmodDiagnostics` and excluded from the timing comparison. The default benchmark disables decompilation to focus on the save/serialization path. Override `getgenv().SYNMOD_BENCHMARK_CONFIG` before running it if you want another profile. Results contain measurements only; timing alone is not treated as proof that one implementation is more correct.
 
+After a real executor run, `bench/analyze.py` can turn the schema-v2 JSON into a measurement-quality and hotspot report:
+
+```bash
+python bench/analyze.py synmod_benchmark.json
+```
+
+It writes `synmod_benchmark.analysis.json` and `synmod_benchmark.analysis.txt`. The analyzer checks paired-sample count, elapsed-time variation, completion rates, output-size equivalence, property-read failure ratio, compression ratio, and ranks observed Syn-mod diagnostic stages by time. It reports warnings/candidate hotspots rather than declaring an automatic winner.
+
 ## Repository layout
 
 - `saveinstance.luau` — generated experimental build based on UniversalSynSaveInstance.

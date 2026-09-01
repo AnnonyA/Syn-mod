@@ -14,6 +14,7 @@ All entries below describe **Syn-mod experimental changes only**. They are not u
 - Added executor metadata and completion-rate reporting.
 - Disabled Syn-mod Metrics during measured timing runs so instrumentation does not bias upstream-vs-Syn-mod timing.
 - Added a separate optional Syn-mod diagnostic run with Metrics enabled; it is excluded from comparison statistics.
+- Added `bench/analyze.py` to convert benchmark JSON into measurement-quality warnings and candidate-hotspot rankings without automatic superiority claims.
 
 ### Observability and hot paths
 
