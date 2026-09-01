@@ -68,6 +68,7 @@ jobs:
           python tests/test_benchmark_v2.py
           python tests/test_benchmark_analyzer.py
           python tests/test_memory_streaming.py
+          python tests/test_deterministic_sharedstrings.py
           python scripts/verify_build.py
 
       - name: Build pinned Luau compiler
