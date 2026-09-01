@@ -62,6 +62,11 @@ require('validation chunk size check', 'chunkSizeMatches' in SOURCE)
 require('validation envelope check', 'formatEnvelope' in SOURCE)
 require('validation file existence check', 'fileExists' in SOURCE)
 require('validation file size check', 'fileSizeMatches' in SOURCE)
+require('validation readback envelope check', 'fileEnvelopeMatches' in SOURCE)
+require(
+    'validation readback envelope affects validity',
+    'valid = valid and checks.fileReadable and checks.fileSizeMatches and checks.fileEnvelopeMatches' in SOURCE,
+)
 require('validation caveat', 'Structural validation does not prove Studio loadability.' in SOURCE)
 require('validation invoked after write', 'ValidationReport = validateOutput(ValidationSnapshot, ctx)' in SOURCE)
 
