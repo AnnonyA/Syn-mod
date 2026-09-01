@@ -1,0 +1,28 @@
+diff --git a/saveinstance.luau b/saveinstance.luau
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -6311,13 +6311,26 @@
+ 			if readfile and checks.fileExists ~= false then
+ 				local ok, contents = pcall(readfile, placename)
+ 				checks.fileReadable = ok and type(contents) == "string"
+ 				if checks.fileReadable then
+ 					report.fileBytes = #contents
+ 					checks.fileSizeMatches = #contents == totalsize
++					if OPTIONS.Binary then
++						local magic = "\60\114\111\98\108\111\120\33\137\255\13\10\26\10\0\0"
++						local tailStart = math.max(1, #contents - 64)
++						checks.fileEnvelopeMatches = string.sub(contents, 1, #magic) == magic
++							and string.find(contents, "END\0", tailStart, true) ~= nil
++							and string.sub(contents, -9) == "</roblox>"
++					else
++						checks.fileEnvelopeMatches = string.find(contents, '<roblox version="4">', 1, true) ~= nil
++							and string.sub(contents, -9) == "</roblox>"
++					end
+ 				else
+ 					checks.fileSizeMatches = false
++					checks.fileEnvelopeMatches = false
+ 				end
+-				valid = valid and checks.fileReadable and checks.fileSizeMatches
++				valid = valid and checks.fileReadable and checks.fileSizeMatches and checks.fileEnvelopeMatches
+ 			end
+ 		end
