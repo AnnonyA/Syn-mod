@@ -1,7 +1,7 @@
 diff --git a/saveinstance.luau b/saveinstance.luau
 --- a/saveinstance.luau
 +++ b/saveinstance.luau
-@@ -6314,10 +6314,12 @@
+@@ -6314,9 +6314,11 @@
  		if fileTarget then
  			if isfile then
  				local ok, exists = pcall(isfile, placename)
