@@ -48,6 +48,22 @@ require('appendfile capability', 'local hasAppendfile = appendfile ~= nil' in SO
 require('gethiddenproperty capability', 'local hasGetHiddenProperty = gethiddenproperty ~= nil' in SOURCE)
 require('getscriptbytecode capability', 'local hasGetScriptBytecode = getscriptbytecode ~= nil' in SOURCE)
 
+# Post-save structural validation is opt-in and reports observations only.
+require('ValidateOutput default off', 'ValidateOutput = false' in SOURCE)
+require('ValidationCallback default', 'ValidationCallback = false' in SOURCE)
+require('ValidationFile default', 'ValidationFile = false' in SOURCE)
+require('validation callback type guard', 'ValidationCallback must be false or a function' in SOURCE)
+require('validation file type guard', 'ValidationFile must be false or a string' in SOURCE)
+require('validation report storage', 'local ValidationReport' in SOURCE)
+require('validation helper', 'local function validateOutput(chunks, ctx)' in SOURCE)
+require('validation scope structural', 'scope = "structural"' in SOURCE)
+require('validation chunk size check', 'chunkSizeMatches' in SOURCE)
+require('validation envelope check', 'formatEnvelope' in SOURCE)
+require('validation file existence check', 'fileExists' in SOURCE)
+require('validation file size check', 'fileSizeMatches' in SOURCE)
+require('validation caveat', 'Structural validation does not prove Studio loadability.' in SOURCE)
+require('validation invoked after write', 'ValidationReport = validateOutput(chunks, ctx)' in SOURCE)
+
 # Benchmark harness.
 require('benchmark file exists', BENCH.is_file())
 if BENCH.is_file():
