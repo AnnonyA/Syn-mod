@@ -2,6 +2,21 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Successful-only decompile caching
+
+### Fidelity and cache reliability
+
+- Script cache entries are now written only when the decompiler reports success.
+- A timeout, executor error, or other failed decompile still produces the existing failure text for that script, but that failure is no longer cached by bytecode and reused for later matching scripts.
+- Successful decompile cache behavior and the public saveinstance API are unchanged.
+- No performance improvement is claimed; repeated failing decompiles may be retried instead of being served from cache.
+
+### Verification
+
+- Added the regression contract first and confirmed the previous generated build failed specifically at the successful-only cache requirement.
+- Added the focused cache patch after the existing validation read-back patch in the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, and pinned Luau compilation before publishing.
+
 ## 2026-09-01 — Validation read-back envelope
 
 ### Structural validation
