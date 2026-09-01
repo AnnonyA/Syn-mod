@@ -3605,6 +3605,10 @@ end
 --- @field ResumeScope string -- Controls how learned crash points are matched. `"instance"` skips only the same instance path + class + property; `"class"` skips that property for every instance of the class. ___Default:___ `"instance"`
 --- @field ResumeMaxSkips number -- Maximum learned crash points kept in the checkpoint. Oldest entries are discarded first to keep recovery state bounded. ___Default:___ 256
 --- @field ClearResumeState boolean -- Clears learned crash-skip points at the start of this run before ResumeOnCrash begins tracking again. ___Default:___ false
+--- @field Metrics boolean -- Enables structured save metrics. Disabled by default so normal saves do not pay instrumentation allocation costs. ___Default:___ false
+--- @field MetricsCallback {boolean|function} -- Optional callback receiving the final metrics report table. Setting this also enables Metrics. ___Default:___ false
+--- @field MetricsFile {boolean|string} -- Optional JSON path for the final metrics report. Setting this also enables Metrics. Requires writefile. ___Default:___ false
+--- @field Compatibility string -- Executor capability policy. `"auto"` applies conservative fallbacks, `"strict"` errors when explicitly requested capabilities are unavailable, and `"off"` leaves options untouched. ___Default:___ `"auto"`
 --- @field IsolateStarterPlayer boolean -- Saves StarterPlayer as separate folder, children of the original instance will be ignored. ___Default:___ false
 --- @field IsolatePlayers boolean -- Saves All Players as separate folder, children of the original instance will be ignored. ___Default:___ false
 --- @field IsolateLocalPlayer boolean -- Saves LocalPlayer as separate folder, original instance will be ignored. ___Default:___ false
@@ -3747,6 +3751,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		ResumeMaxSkips = 256,
 		ClearResumeState = false,
 
+		Metrics = false,
+		MetricsCallback = false,
+		MetricsFile = false,
+		Compatibility = "auto",
+
 		IsolateLocalPlayer = false, --  #service.StarterGui:GetChildren() == 0
 		IsolateLocalPlayerCharacter = false,
 		IsolatePlayers = false,
@@ -3825,6 +3834,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		Callback = { boolean = true, ["function"] = true },
 		CompressionMode = { boolean = true, string = true },
 		FilePath = { boolean = true, string = true },
+		MetricsCallback = { boolean = true, ["function"] = true },
+		MetricsFile = { boolean = true, string = true },
 		Object = { boolean = true, Instance = true },
 		ResumeFile = { boolean = true, string = true },
 		SpecialProperties = { boolean = true, string = true, table = true },
@@ -3872,6 +3883,12 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			error('ResumeScope must be "instance" or "class"', 3)
 		elseif option == "ResumeMaxSkips" and (value < 1 or value % 1 ~= 0) then
 			error("ResumeMaxSkips must be a positive integer", 3)
+		elseif option == "MetricsCallback" and value ~= false and valueType ~= "function" then
+			error("MetricsCallback must be false or a function", 3)
+		elseif option == "MetricsFile" and value ~= false and valueType ~= "string" then
+			error("MetricsFile must be false or a string", 3)
+		elseif option == "Compatibility" and value ~= "auto" and value ~= "strict" and value ~= "off" then
+			error('Compatibility must be "auto", "strict", or "off"', 3)
 		elseif option == "CompressionMode" and valueType == "string" and value ~= "zstd" and value ~= "lz4" then
 			error('CompressionMode string must be "zstd" or "lz4"', 3)
 		elseif option == "CompressionLevel" and (value < -7 or value > 22) then
@@ -4018,6 +4035,110 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 	end
 
+	if OPTIONS.MetricsCallback ~= false or OPTIONS.MetricsFile ~= false then
+		OPTIONS.Metrics = true
+	end
+
+	local placename
+	local MetricsEnabled = OPTIONS.Metrics == true
+	local MetricsFinalized = false
+	local MetricsReport = MetricsEnabled and {
+		schemaVersion = 1,
+		tool = "Syn-mod",
+		executor = EXECUTOR_NAME ~= "" and EXECUTOR_NAME or "Unknown",
+		mode = OPTIONS.mode,
+		binary = OPTIONS.Binary,
+		startedClock = os.clock(),
+		stages = {},
+		counters = {
+			instancesCollected = 0,
+			propertiesAttempted = 0,
+			propertiesSaved = 0,
+			propertiesSerialized = 0,
+			propertiesSkipped = 0,
+			propertyReadFailures = 0,
+			decompileAttempted = 0,
+			decompileSucceeded = 0,
+			decompileFailed = 0,
+			decompileCacheHits = 0,
+			resumeSkips = 0,
+		},
+	} or nil
+
+	local MetricsMemoryStart
+	if MetricsEnabled and type(gcinfo) == "function" then
+		local ok, value = pcall(gcinfo)
+		if ok and type(value) == "number" then
+			MetricsMemoryStart = value
+		end
+	end
+
+	local CompatibilityReport
+
+	local function metricCount(name, amount)
+		if MetricsEnabled then
+			local counters = MetricsReport.counters
+			counters[name] = (counters[name] or 0) + (amount or 1)
+		end
+	end
+
+	local function metricStageBegin(name)
+		if MetricsEnabled then
+			return os.clock()
+		end
+	end
+
+	local function metricStageEnd(name, started)
+		if MetricsEnabled and started then
+			local elapsed = os.clock() - started
+			MetricsReport.stages[name] = (MetricsReport.stages[name] or 0) + elapsed
+			return elapsed
+		end
+	end
+
+	local function metricAddTime(name, elapsed)
+		if MetricsEnabled and elapsed then
+			MetricsReport.stages[name] = (MetricsReport.stages[name] or 0) + elapsed
+		end
+	end
+
+	local function finalizeMetrics(success, errorMessage)
+		if not MetricsEnabled or MetricsFinalized then
+			return MetricsReport
+		end
+
+		MetricsFinalized = true
+		MetricsReport.success = success == true
+		MetricsReport.error = success and nil or tostring(errorMessage or "unknown error")
+		MetricsReport.mode = OPTIONS.mode
+		MetricsReport.binary = OPTIONS.Binary
+		MetricsReport.outputBytes = totalsize
+		MetricsReport.outputFile = placename
+		MetricsReport.compatibility = CompatibilityReport
+		MetricsReport.elapsedSeconds = os.clock() - MetricsReport.startedClock
+
+		if MetricsMemoryStart then
+			MetricsReport.memoryKbStart = MetricsMemoryStart
+			local ok, value = pcall(gcinfo)
+			if ok and type(value) == "number" then
+				MetricsReport.memoryKbEnd = value
+				MetricsReport.memoryKbDelta = value - MetricsMemoryStart
+			end
+		end
+
+		local metricsCallback = OPTIONS.MetricsCallback
+		if type(metricsCallback) == "function" then
+			pcall(metricsCallback, MetricsReport)
+		end
+
+		local metricsFile = OPTIONS.MetricsFile
+		if type(metricsFile) == "string" and writefile then
+			pcall(writefile, metricsFile, service.HttpService:JSONEncode(MetricsReport))
+		end
+
+		return MetricsReport
+	end
+
 	local function applyModePresets(mode)
 		mode = string.lower(mode)
 
@@ -4074,6 +4195,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		warn(text)
 
 		GLOBAL_ENV.USSI = nil
+		finalizeMetrics(false, text)
 		return
 	end
 
@@ -4099,6 +4221,93 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local CompressionLevel = OPTIONS.CompressionLevel
 	local CompressionMode = OPTIONS.CompressionMode
+
+	CompatibilityReport = {
+		mode = OPTIONS.Compatibility,
+		executor = EXECUTOR_NAME ~= "" and EXECUTOR_NAME or "Unknown",
+		capabilities = {
+			writefile = writefile ~= nil,
+			appendfile = appendfile ~= nil,
+			gethiddenproperty = gethiddenproperty ~= nil,
+			getscriptbytecode = getscriptbytecode ~= nil,
+			zstdcompress = zstdcompress ~= nil,
+			lz4compress = lz4compress ~= nil,
+		},
+		adjustments = {},
+	}
+
+	local CompatibilityAppliedEarly = false
+	local CompatibilityStrictErrors = {}
+	local function applyCompatibilityProfile(compressionReady)
+		local mode = OPTIONS.Compatibility
+		local capabilities = CompatibilityReport.capabilities
+		capabilities.writefile = writefile ~= nil
+		capabilities.appendfile = appendfile ~= nil
+		capabilities.gethiddenproperty = gethiddenproperty ~= nil
+		capabilities.getscriptbytecode = getscriptbytecode ~= nil
+		capabilities.zstdcompress = zstdcompress ~= nil
+		capabilities.lz4compress = lz4compress ~= nil
+
+		if mode == "off" then
+			return
+		end
+
+		local function strictFailure(message)
+			CompatibilityStrictErrors[#CompatibilityStrictErrors + 1] = message
+		end
+
+		local function adjust(key, fromValue, toValue, reason)
+			CompatibilityReport.adjustments[#CompatibilityReport.adjustments + 1] = {
+				option = key, from = fromValue, to = toValue, reason = reason,
+			}
+			OPTIONS[key] = toValue
+		end
+
+		if not CompatibilityAppliedEarly then
+			CompatibilityAppliedEarly = true
+
+			if OPTIONS.AlternativeWritefile and not appendfile then
+				if mode == "strict" then
+					strictFailure("AlternativeWritefile requires appendfile")
+				else
+					adjust("AlternativeWritefile", true, false, "appendfile unavailable")
+				end
+			end
+
+			if OPTIONS.SaveBytecode and not getscriptbytecode then
+				if mode == "strict" then
+					strictFailure("SaveBytecode requires getscriptbytecode")
+				else
+					adjust("SaveBytecode", true, false, "getscriptbytecode unavailable")
+				end
+			end
+		end
+
+		if not compressionReady then
+			return
+		end
+
+		local requested = OPTIONS.CompressionMode
+		local fallback
+		if requested == "zstd" and not zstdcompress then
+			fallback = lz4compress and "lz4" or false
+		elseif requested == "lz4" and not lz4compress then
+			fallback = zstdcompress and "zstd" or false
+		end
+
+		if fallback ~= nil then
+			if mode == "strict" then
+				strictFailure("requested compression backend is unavailable: " .. tostring(requested))
+			else
+				CompatibilityReport.compressionFallback = { from = requested, to = fallback }
+				adjust("CompressionMode", requested, fallback, "requested compression backend unavailable")
+			end
+		end
+
+		CompressionMode = OPTIONS.CompressionMode
+	end
+
+	applyCompatibilityProfile(false)
 
 	local __DEBUG_MODE = OPTIONS.__DEBUG_MODE
 
@@ -4214,7 +4423,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local SharedBinaryStrings = OPTIONS.SharedBinaryStrings
 
-	local ToSaveList, ldecompile, placename, elapse_t, SaveNotCreatableWillBeEnabled, RecoveredScripts
+	local ToSaveList, ldecompile, elapse_t, SaveNotCreatableWillBeEnabled, RecoveredScripts
 
 	if OPTIONS.ReadMe then
 		RecoveredScripts = {}
@@ -4441,23 +4650,31 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		ResumeFile = "USSI_resume_" .. tostring(game.PlaceId) .. ".json"
 	end
 
-	local ResumeIdentity = table.concat({
+	local ResumePathCache = ResumeEnabled and setmetatable({}, { __mode = "k" }) or nil
+
+	local function resumeInstancePath(instance)
+		local cached = ResumePathCache[instance]
+		if cached then
+			return cached
+		end
+
+		local ok, path = pcall(instance.GetFullName, instance)
+		if not ok or type(path) ~= "string" then
+			path = instance.ClassName .. ":" .. instance.Name
+		end
+
+		ResumePathCache[instance] = path
+		return path
+	end
+
+	local ResumeIdentity = ResumeEnabled and table.concat({
 		tostring(game.PlaceId),
 		tostring(OPTIONS.mode),
 		tostring(ResumeScope),
-		Object and Object:GetFullName() or "game",
-	}, "|")
+		Object and resumeInstancePath(Object) or "game",
+	}, "|") or nil
 	local ResumeState
 	local ResumeSkipMap = {}
-
-	local function resumeInstancePath(instance)
-		local ok, path = pcall(instance.GetFullName, instance)
-		if ok and type(path) == "string" then
-			return path
-		end
-
-		return instance.ClassName .. ":" .. instance.Name
-	end
 
 	local function resumePointKey(className, propertyName, instancePath)
 		local key = className .. "\0" .. propertyName
@@ -4530,17 +4747,29 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		persistResumeState()
 	end
 
+	local function resumePointFor(instance, propertyName)
+		local instancePath = ResumeScope == "instance" and resumeInstancePath(instance) or nil
+		return resumePointKey(instance.ClassName, propertyName, instancePath), instancePath
+	end
+
 	local function resumeShouldSkip(instance, propertyName)
-		return ResumeEnabled
-			and ResumeSkipMap[resumePointKey(instance.ClassName, propertyName, resumeInstancePath(instance))] == true
+		if not ResumeEnabled then
+			return false
+		end
+		local point = resumePointFor(instance, propertyName)
+		local skip = ResumeSkipMap[point] == true
+		if skip then
+			metricCount("resumeSkips")
+		end
+		return skip
 	end
 
 	local function resumeBeforeRiskyRead(instance, propertyName, valueType)
 		if not ResumeEnabled then return end
-		local instancePath = resumeInstancePath(instance)
+		local point, instancePath = resumePointFor(instance, propertyName)
 		ResumeState.status = "reading"
 		ResumeState.current = {
-			key = resumePointKey(instance.ClassName, propertyName, instancePath), class = instance.ClassName,
+			key = point, class = instance.ClassName,
 			property = propertyName, valueType = valueType, instance = instancePath,
 		}
 		ResumeState.updatedAt = os.time()
@@ -4781,6 +5010,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				end
 
 				if cached then
+					metricCount("decompileCacheHits")
 					if __DEBUG_MODE then
 						__DEBUG_MODE("Found in Cache", script:GetFullName())
 					end
@@ -4794,16 +5024,23 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				-- task.wait() -- TODO Maybe remove?
 			end
 
+			metricCount("decompileAttempted")
+			local decompileStarted = MetricsEnabled and os.clock() or nil
 			local ok, result = run_with_loading("Decompiling " .. script.Name, true, nil, decomp, script)
+			if decompileStarted then
+				metricAddTime("decompile", os.clock() - decompileStarted)
+			end
 			if not result then
 				ok, result = false, "Empty Output"
 			end
 
 			local output
 			if ok then
+				metricCount("decompileSucceeded")
 				result = string.gsub(result, "\0", "\\0") -- ? Some decompilers sadly output \0 which prevents files from opening
 				output = result
 			else
+				metricCount("decompileFailed")
 				output = "--[[ Failed to decompile. Reason:\n" .. (result or "") .. "\n]]"
 			end
 
@@ -5031,11 +5268,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		saveGHPState()
 	end
 
-	local function readProperty(instance, property)
+	local function readPropertyCore(instance, property)
 		local PropertyName, ValueType, CanRead, Special =
 			property.Name, property.ValueType, property.CanRead, property.Special
 
-		if resumeShouldSkip(instance, PropertyName) then
+		if ResumeEnabled and resumeShouldSkip(instance, PropertyName) then
 			return __BREAK
 		end
 
@@ -5080,9 +5317,16 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				if property.Shadows and GHPShadowed then
 					property.CanRead = false
 				elseif gethiddenproperty and ghpDatatypeAllowed(GHPKey) then
-					resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+					if ResumeEnabled then
+						resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+					end
 					local ok, result = pcall(gethiddenproperty, instance, PropertyName)
-					resumeAfterRiskyRead()
+					if ResumeEnabled then
+						resumeAfterRiskyRead()
+					end
+					if not ok then
+						metricCount("propertyReadFailures")
+					end
 					if ok then
 						raw = result
 					end
@@ -5109,9 +5353,16 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				if ok then
 					raw = result
 				elseif not (property.Shadows and GHPShadowed) and gethiddenproperty and ghpDatatypeAllowed(GHPKey) then
-					resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+					if ResumeEnabled then
+						resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+					end
 					ok, result = pcall(gethiddenproperty, instance, PropertyName)
-					resumeAfterRiskyRead()
+					if ResumeEnabled then
+						resumeAfterRiskyRead()
+					end
+					if not ok then
+						metricCount("propertyReadFailures")
+					end
 					ghpDatatypeReport(GHPKey, ok and not filterPropVal(result, property, Category, Optional))
 					if ok then
 						raw = result
@@ -5139,9 +5390,16 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 
 		if not GHPFFailed then
-			resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+			if ResumeEnabled then
+				resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+			end
 			local ok, result = pcall(gethiddenproperty_fallback, instance, PropertyName)
-			resumeAfterRiskyRead()
+			if ResumeEnabled then
+				resumeAfterRiskyRead()
+			end
+			if not ok then
+				metricCount("propertyReadFailures")
+			end
 			if result == nil and not nilIsValid(Category, Optional) then
 				ok = nil
 			end
@@ -5164,6 +5422,20 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 
 		return __BREAK
+	end
+
+	local readProperty = readPropertyCore
+	if MetricsEnabled then
+		readProperty = function(instance, property)
+			metricCount("propertiesAttempted")
+			local raw = readPropertyCore(instance, property)
+			if raw == __BREAK then
+				metricCount("propertiesSkipped")
+			else
+				metricCount("propertiesSaved")
+			end
+			return raw
+		end
 	end
 
 	local function ReturnItem(className, instance)
@@ -5607,6 +5879,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						local chunk = buildChunk("PROP", propBuf, compress)
 						propChunks[#propChunks + 1] = chunk
 						totalsize += chunk.len + (chunk.str and #chunk.str or chunk.tailLen or 0)
+						metricCount("propertiesSerialized", #objs)
 					else
 						warn("UNSUPPORTED BINARY TYPE (OPEN A GITHUB ISSUE): ", propName, binaryType)
 					end
@@ -5844,6 +6117,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						if tag then
 							savebuffer[savebuffer_size] = ReturnProperty(tag, PropertyName, value)
 							savebuffer_size += 1
+							metricCount("propertiesSerialized")
 						else
 							warn("UNSUPPORTED XML TYPE (OPEN A GITHUB ISSUE): ", PropertyName, ValueType)
 						end
@@ -6110,7 +6384,12 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			end
 		end
 
+		local collectStarted = metricStageBegin("collect")
 		local ctx = collect(allRoots)
+		metricStageEnd("collect", collectStarted)
+		if MetricsEnabled then
+			MetricsReport.counters.instancesCollected = ctx.instCount
+		end
 
 		-- collect filtered and deduped; recover each extra's surviving roots.
 		for _, extra in pendingExtras do
@@ -6173,7 +6452,12 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 		ctx.mainRoots = mainRoots
 
+		local serializeStarted = metricStageBegin("serialize")
 		local chunks = OPTIONS.Binary and emitBinary(ctx) or emitXML(ctx)
+		metricStageEnd("serialize", serializeStarted)
+		if MetricsEnabled then
+			MetricsReport.outputBytes = totalsize
+		end
 
 		if OPTIONS.ReadMe then
 			stampElapsed(chunks, os.clock() - elapse_t)
@@ -6181,6 +6465,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		markResumeWriting()
 
+		local writeStarted = metricStageBegin("write")
 		if CopyToClipboard then
 			setrbxclipboard(table.concat(chunks))
 		elseif Callback then
@@ -6242,6 +6527,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				table.concat(chunks)
 			)
 		end
+		metricStageEnd("write", writeStarted)
 
 		markResumeComplete()
 	end
@@ -6726,8 +7012,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			)
 
 			if not base64encode then
-				warn("base64encode not found")
+				local message = "base64encode not found"
+				warn(message)
 				Cleanup()
+				finalizeMetrics(false, message)
 				return
 			end
 
@@ -6820,6 +7108,14 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			lz4compress = pickFastestBy("lz4compress", { lz4compress, llz4_compress }, lz4Works, 10, COMPRESS_TEST)
 		end
 
+		applyCompatibilityProfile(true)
+		if #CompatibilityStrictErrors > 0 then
+			local message = "Compatibility strict mode: " .. table.concat(CompatibilityStrictErrors, "; ")
+			Cleanup()
+			finalizeMetrics(false, message)
+			error(message, 2)
+		end
+
 		do
 			local ok, result = pcall(FetchAPI)
 			if ok then
@@ -6828,6 +7124,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				warn("Failed to load the API Dump")
 				warn(result)
 				Cleanup()
+				finalizeMetrics(false, result)
 				return
 			end
 		end
@@ -6858,6 +7155,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	Cleanup()
 
 	elapse_t = os.clock() - elapse_t
+	if MetricsEnabled then
+		MetricsReport.saveGameSeconds = elapse_t
+	end
+	finalizeMetrics(ok, err)
 	local Log10 = math.log10(elapse_t)
 	local ExtraTime = 10
 
