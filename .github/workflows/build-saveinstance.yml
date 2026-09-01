@@ -74,6 +74,8 @@ jobs:
           git apply patches/executor-identify-guard-v1.patch
           git apply --check patches/readme-executor-identify-guard-v1.patch
           git apply patches/readme-executor-identify-guard-v1.patch
+          git apply --check patches/executor-metadata-normalization-v1.patch
+          git apply patches/executor-metadata-normalization-v1.patch
 
       - name: Run regression checks
         shell: bash
