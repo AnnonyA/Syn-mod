@@ -56,6 +56,7 @@ local Options = {
     ResumeScope = "instance",
     ResumeMaxSkips = 256,
     SpecialProperties = "all",
+    ValidateOutput = true,
 }
 
 synsaveinstance(Options)
@@ -73,6 +74,7 @@ The current experimental build includes:
 - optional class-scoped recovery through `ResumeScope = "class"`
 - bounded recovery history through `ResumeMaxSkips`
 - opt-in structured metrics for timing, output size, property/decompile activity, and observable memory deltas
+- opt-in post-save structural validation for generated Binary/XML output and optional file read-back
 - a reproducible `upstream vs Syn-mod` benchmark harness with balanced alternating order, paired deltas, medians, and variability reporting
 - automatic executor capability profiling and conservative compatibility fallbacks
 - recovery path caching, lazy compatibility reporting, and disabled-by-default instrumentation fast paths
@@ -124,7 +126,27 @@ saveinstance({
 })
 ```
 
-The report includes stage timings for collection, serialization, compression, output joining, writing, and aggregate decompilation time; collected-instance counts; property read/serialization counters; compression attempt/use/rejection counters and byte totals; output-join counts/bytes; decompiler activity; output bytes; recovery skips; the selected compatibility profile; and `gcinfo()` start/end/delta values when that API is available. The memory values are observations, not peak-memory measurements.
+The report includes stage timings for collection, serialization, compression, output joining, writing, and aggregate decompilation time; collected-instance counts; property read/serialization counters; compression attempt/use/rejection counters and byte totals; output-join counts/bytes; decompiler activity; output bytes; recovery skips; the selected compatibility profile; the latest validation report when validation is enabled; and `gcinfo()` start/end/delta values when that API is available. The memory values are observations, not peak-memory measurements.
+
+## Post-save structural validation
+
+Validation is disabled by default. Enable it when you want a conservative integrity report after the output has been generated and written:
+
+```luau
+saveinstance({
+    ValidateOutput = true,
+    ValidationFile = "synmod_validation.json",
+    ValidationCallback = function(report)
+        print("Structural validation:", report.valid)
+        print("Envelope:", report.checks.formatEnvelope)
+        print("Chunk bytes match:", report.checks.chunkSizeMatches)
+    end,
+})
+```
+
+Setting `ValidationCallback` or `ValidationFile` automatically enables validation. Validation v1 checks that output is non-empty, the sum of generated chunk sizes matches the expected output size, and the Binary or XML envelope has the expected opening/ending markers. For normal file output, it also uses `isfile`/`readfile` when available to confirm that the file exists, can be read back, and has the expected size.
+
+The report deliberately uses `scope = "structural"`. A successful report means the structural checks that were available passed; **it does not prove that Roblox Studio will load every saved object/property correctly**. The report includes the warning `Structural validation does not prove Studio loadability.` for that reason.
 
 ## Compatibility profiles
 
@@ -153,10 +175,13 @@ It writes `synmod_benchmark.analysis.json` and `synmod_benchmark.analysis.txt`. 
 - `patches/recovery-v2.patch` — focused Recovery v2 improvements applied after the base patch.
 - `patches/performance-compat-v1/` — ordered patches for metrics, hot-path recovery caching, and compatibility profiling.
 - `patches/benchmark-observability-v2.patch` — benchmark fairness/statistics, compression/join observability, and compatibility-off fast-path improvements.
+- `patches/post-save-validation-v1.patch` — opt-in structural validation and optional output-file read-back checks.
 - `bench/compare.luau` — executor-side comparison harness for pinned upstream versus Syn-mod.
+- `bench/analyze.py` — benchmark measurement-quality and hotspot analyzer.
 - `tests/test_mod_features.py` — base feature/recovery regression checks.
-- `tests/test_performance_compat.py` — metrics, benchmark, hot-path, and compatibility regression checks.
+- `tests/test_performance_compat.py` — metrics, benchmark, hot-path, compatibility, and validation regression checks.
 - `tests/test_benchmark_v2.py` — benchmark-v2 fairness/statistics and observability regression checks.
+- `tests/test_benchmark_analyzer.py` — benchmark analyzer regression checks.
 - `scripts/verify_build.py` — generated-build structural verification.
 - `.github/workflows/build-saveinstance.yml` — reproducible build and verification workflow.
 - `CHANGELOG.md` — user-facing history of Syn-mod changes.
