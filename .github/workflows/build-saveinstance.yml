@@ -60,6 +60,8 @@ jobs:
           git apply patches/ghp-state-preserve-v1.patch
           git apply --check patches/deterministic-sharedstrings-v1.patch
           git apply patches/deterministic-sharedstrings-v1.patch
+          git apply --check patches/validation-readback-envelope-v1.patch
+          git apply patches/validation-readback-envelope-v1.patch
 
       - name: Run regression checks
         shell: bash
