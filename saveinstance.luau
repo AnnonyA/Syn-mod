@@ -4043,7 +4043,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local MetricsEnabled = OPTIONS.Metrics == true
 	local MetricsFinalized = false
 	local MetricsReport = MetricsEnabled and {
-		schemaVersion = 1,
+		schemaVersion = 2,
 		tool = "Syn-mod",
 		executor = EXECUTOR_NAME ~= "" and EXECUTOR_NAME or "Unknown",
 		mode = OPTIONS.mode,
@@ -4062,6 +4062,13 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			decompileFailed = 0,
 			decompileCacheHits = 0,
 			resumeSkips = 0,
+			compressionAttempted = 0,
+			compressionUsed = 0,
+			compressionRejected = 0,
+			compressionInputBytes = 0,
+			compressionOutputBytes = 0,
+			joinCalls = 0,
+			joinedBytes = 0,
 		},
 	} or nil
 
@@ -4222,31 +4229,38 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local CompressionLevel = OPTIONS.CompressionLevel
 	local CompressionMode = OPTIONS.CompressionMode
 
-	CompatibilityReport = {
-		mode = OPTIONS.Compatibility,
+	local CompatibilityMode = OPTIONS.Compatibility
+	CompatibilityReport = MetricsEnabled and {
+		mode = CompatibilityMode,
 		executor = EXECUTOR_NAME ~= "" and EXECUTOR_NAME or "Unknown",
-		capabilities = {
-			writefile = writefile ~= nil,
-			appendfile = appendfile ~= nil,
-			gethiddenproperty = gethiddenproperty ~= nil,
-			getscriptbytecode = getscriptbytecode ~= nil,
-			zstdcompress = zstdcompress ~= nil,
-			lz4compress = lz4compress ~= nil,
-		},
+		capabilities = {},
 		adjustments = {},
-	}
+	} or nil
 
 	local CompatibilityAppliedEarly = false
-	local CompatibilityStrictErrors = {}
+	local CompatibilityStrictErrors = CompatibilityMode == "strict" and {} or nil
 	local function applyCompatibilityProfile(compressionReady)
-		local mode = OPTIONS.Compatibility
-		local capabilities = CompatibilityReport.capabilities
-		capabilities.writefile = writefile ~= nil
-		capabilities.appendfile = appendfile ~= nil
-		capabilities.gethiddenproperty = gethiddenproperty ~= nil
-		capabilities.getscriptbytecode = getscriptbytecode ~= nil
-		capabilities.zstdcompress = zstdcompress ~= nil
-		capabilities.lz4compress = lz4compress ~= nil
+		local mode = CompatibilityMode
+		if mode == "off" and not CompatibilityReport then
+			return
+		end
+
+		local hasWritefile = writefile ~= nil
+		local hasAppendfile = appendfile ~= nil
+		local hasGetHiddenProperty = gethiddenproperty ~= nil
+		local hasGetScriptBytecode = getscriptbytecode ~= nil
+		local hasZstd = zstdcompress ~= nil
+		local hasLz4 = lz4compress ~= nil
+
+		if CompatibilityReport then
+			local capabilities = CompatibilityReport.capabilities
+			capabilities.writefile = hasWritefile
+			capabilities.appendfile = hasAppendfile
+			capabilities.gethiddenproperty = hasGetHiddenProperty
+			capabilities.getscriptbytecode = hasGetScriptBytecode
+			capabilities.zstdcompress = hasZstd
+			capabilities.lz4compress = hasLz4
+		end
 
 		if mode == "off" then
 			return
@@ -4257,16 +4271,18 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 
 		local function adjust(key, fromValue, toValue, reason)
-			CompatibilityReport.adjustments[#CompatibilityReport.adjustments + 1] = {
-				option = key, from = fromValue, to = toValue, reason = reason,
-			}
+			if CompatibilityReport then
+				CompatibilityReport.adjustments[#CompatibilityReport.adjustments + 1] = {
+					option = key, from = fromValue, to = toValue, reason = reason,
+				}
+			end
 			OPTIONS[key] = toValue
 		end
 
 		if not CompatibilityAppliedEarly then
 			CompatibilityAppliedEarly = true
 
-			if OPTIONS.AlternativeWritefile and not appendfile then
+			if OPTIONS.AlternativeWritefile and not hasAppendfile then
 				if mode == "strict" then
 					strictFailure("AlternativeWritefile requires appendfile")
 				else
@@ -4274,7 +4290,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				end
 			end
 
-			if OPTIONS.SaveBytecode and not getscriptbytecode then
+			if OPTIONS.SaveBytecode and not hasGetScriptBytecode then
 				if mode == "strict" then
 					strictFailure("SaveBytecode requires getscriptbytecode")
 				else
@@ -4289,17 +4305,19 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		local requested = OPTIONS.CompressionMode
 		local fallback
-		if requested == "zstd" and not zstdcompress then
-			fallback = lz4compress and "lz4" or false
-		elseif requested == "lz4" and not lz4compress then
-			fallback = zstdcompress and "zstd" or false
+		if requested == "zstd" and not hasZstd then
+			fallback = hasLz4 and "lz4" or false
+		elseif requested == "lz4" and not hasLz4 then
+			fallback = hasZstd and "zstd" or false
 		end
 
 		if fallback ~= nil then
 			if mode == "strict" then
 				strictFailure("requested compression backend is unavailable: " .. tostring(requested))
 			else
-				CompatibilityReport.compressionFallback = { from = requested, to = fallback }
+				if CompatibilityReport then
+					CompatibilityReport.compressionFallback = { from = requested, to = fallback }
+				end
 				adjust("CompressionMode", requested, fallback, "requested compression backend unavailable")
 			end
 		end
@@ -5690,12 +5708,30 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		head:writestring(name)
 
 		if compress then
+			local compressStarted = MetricsEnabled and os.clock() or nil
+			if MetricsEnabled then
+				metricCount("compressionAttempted")
+				metricCount("compressionInputBytes", uncompressedLen)
+			end
+
 			local dataStr = compress(chunkBuf:tostring())
+
+			if compressStarted then
+				metricAddTime("compress", os.clock() - compressStarted)
+			end
+
 			if dataStr and #dataStr < uncompressedLen then
+				if MetricsEnabled then
+					metricCount("compressionUsed")
+					metricCount("compressionOutputBytes", #dataStr)
+				end
+
 				head:writeu32(#dataStr)
 				head:writeu32(uncompressedLen)
 				head:writeu32(0) -- reserved
 				return { buf = head.buf, len = head.len, str = dataStr }
+			elseif MetricsEnabled then
+				metricCount("compressionRejected")
 			end
 		end
 
@@ -6465,11 +6501,23 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		markResumeWriting()
 
+		local joinChunks = table.concat
+		if MetricsEnabled then
+			joinChunks = function(parts)
+				local started = os.clock()
+				local joined = table.concat(parts)
+				metricCount("joinCalls")
+				metricCount("joinedBytes", #joined)
+				metricAddTime("join", os.clock() - started)
+				return joined
+			end
+		end
+
 		local writeStarted = metricStageBegin("write")
 		if CopyToClipboard then
-			setrbxclipboard(table.concat(chunks))
+			setrbxclipboard(joinChunks(chunks))
 		elseif Callback then
-			Callback(table.concat(chunks), chunks)
+			Callback(joinChunks(chunks), chunks)
 		elseif OPTIONS.AlternativeWritefile and appendfile then
 			-- Batch chunks into ~4MB appends: sizes come from #chunk, so nothing
 			-- is joined until a batch actually flushes. A whole-file concat would
@@ -6488,7 +6536,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 					false,
 					appendfile,
 					placename,
-					table.concat(batch)
+					joinChunks(batch)
 				)
 				table.clear(batch)
 				batchSize = 0
@@ -6524,7 +6572,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				true,
 				writefile,
 				placename,
-				table.concat(chunks)
+				joinChunks(chunks)
 			)
 		end
 		metricStageEnd("write", writeStarted)
@@ -7109,7 +7157,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 
 		applyCompatibilityProfile(true)
-		if #CompatibilityStrictErrors > 0 then
+		if CompatibilityStrictErrors and #CompatibilityStrictErrors > 0 then
 			local message = "Compatibility strict mode: " .. table.concat(CompatibilityStrictErrors, "; ")
 			Cleanup()
 			finalizeMetrics(false, message)
