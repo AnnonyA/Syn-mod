@@ -2,6 +2,22 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Validation read-back envelope
+
+### Structural validation
+
+- When `ValidateOutput` can read back a normal file target, Syn-mod now validates the envelope of the bytes actually written in addition to checking readability and final byte size.
+- Binary read-back checks require the expected Roblox binary magic, an `END\0` marker near the file tail, and the closing `</roblox>` payload.
+- XML read-back checks require the opening Roblox element and closing `</roblox>` marker.
+- A same-size file with a damaged opening or closing envelope now fails structural validation instead of passing solely because its byte count matches.
+- The public saveinstance API and serialized output formats are unchanged.
+
+### Verification
+
+- Added the regression contract first and confirmed it failed on the previous generated build at the missing read-back envelope check.
+- Added the focused validation read-back patch after the existing deterministic SharedStrings patch in the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, and pinned Luau compilation before updating the changelog.
+
 ## 2026-09-01 — Deterministic XML SharedStrings
 
 ### Determinism
@@ -86,7 +102,7 @@ All entries below describe **Syn-mod experimental changes only**. They are not u
 - Added executor metadata and completion-rate reporting.
 - Disabled Syn-mod Metrics during measured timing runs so instrumentation does not bias upstream-vs-Syn-mod timing.
 - Added a separate optional Syn-mod diagnostic run with Metrics enabled; it is excluded from comparison statistics.
-- Added `bench/analyze.py` to convert benchmark JSON into a measurement-quality and hotspot report without automatic superiority claims.
+- Added `bench/analyze.py` to convert benchmark JSON into measurement-quality warnings and candidate-hotspot rankings without automatic superiority claims.
 
 ### Observability and hot paths
 
