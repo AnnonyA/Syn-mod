@@ -1,0 +1,69 @@
+name: Build experimental saveinstance
+
+on:
+  push:
+    paths:
+      - modifications.patch
+      - .github/workflows/build-saveinstance.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Syn-mod
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned UniversalSynSaveInstance upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/3ba234b586868f8ca2a0000f93e5709e57d3699d/saveinstance.luau" \
+            --output saveinstance.luau
+
+          actual_sha="$(git hash-object saveinstance.luau)"
+          expected_sha="0daa88270abdfec6a345d4505b551be7efe41d89"
+
+          if [ "$actual_sha" != "$expected_sha" ]; then
+            echo "Unexpected upstream blob: $actual_sha" >&2
+            exit 1
+          fi
+
+      - name: Apply Syn-mod experimental patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check modifications.patch
+          git apply modifications.patch
+
+      - name: Verify attribution and experimental features
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "Upstream/source: UniversalSynSaveInstance" saveinstance.luau
+          grep -Fq "SpecialProperties = \"all\"" saveinstance.luau
+          grep -Fq "ResumeOnCrash = false" saveinstance.luau
+          grep -Fq "local function validateOptionValue" saveinstance.luau
+          grep -Fq "local function applyModePresets" saveinstance.luau
+          grep -Fq "// 4294967296" saveinstance.luau
+
+      - name: Commit generated build
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add saveinstance.luau
+
+          if git diff --cached --quiet; then
+            echo "Generated saveinstance.luau is already up to date."
+            exit 0
+          fi
+
+          git commit -m "build: generate experimental saveinstance"
+          git push
