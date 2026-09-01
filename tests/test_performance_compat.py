@@ -56,11 +56,11 @@ require(
     and 'execName, execVersion = identify_executor()' not in SOURCE,
 )
 require(
-    'executor metadata is normalized',
+    'executor metadata is normalized safely',
     'type(name) ~= "string"' in SOURCE
-    and 'name = tostring(name)' in SOURCE
+    and 'pcall(tostring, name)' in SOURCE
     and 'type(version) ~= "string"' in SOURCE
-    and 'version = tostring(version)' in SOURCE,
+    and 'pcall(tostring, version)' in SOURCE,
 )
 
 # Post-save structural validation is opt-in and reports observations only.
