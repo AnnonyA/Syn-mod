@@ -3608,6 +3608,9 @@ end
 --- @field Metrics boolean -- Enables structured save metrics. Disabled by default so normal saves do not pay instrumentation allocation costs. ___Default:___ false
 --- @field MetricsCallback {boolean|function} -- Optional callback receiving the final metrics report table. Setting this also enables Metrics. ___Default:___ false
 --- @field MetricsFile {boolean|string} -- Optional JSON path for the final metrics report. Setting this also enables Metrics. Requires writefile. ___Default:___ false
+--- @field ValidateOutput boolean -- Enables conservative post-save structural validation. This checks the generated container/output shape and optional file read-back, but does not prove Studio loadability. ___Default:___ false
+--- @field ValidationCallback {boolean|function} -- Optional callback receiving the structural validation report. Setting this also enables ValidateOutput. ___Default:___ false
+--- @field ValidationFile {boolean|string} -- Optional JSON path for the structural validation report. Setting this also enables ValidateOutput. Requires writefile. ___Default:___ false
 --- @field Compatibility string -- Executor capability policy. `"auto"` applies conservative fallbacks, `"strict"` errors when explicitly requested capabilities are unavailable, and `"off"` leaves options untouched. ___Default:___ `"auto"`
 --- @field IsolateStarterPlayer boolean -- Saves StarterPlayer as separate folder, children of the original instance will be ignored. ___Default:___ false
 --- @field IsolatePlayers boolean -- Saves All Players as separate folder, children of the original instance will be ignored. ___Default:___ false
@@ -3754,6 +3757,9 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		Metrics = false,
 		MetricsCallback = false,
 		MetricsFile = false,
+		ValidateOutput = false,
+		ValidationCallback = false,
+		ValidationFile = false,
 		Compatibility = "auto",
 
 		IsolateLocalPlayer = false, --  #service.StarterGui:GetChildren() == 0
@@ -3836,6 +3842,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		FilePath = { boolean = true, string = true },
 		MetricsCallback = { boolean = true, ["function"] = true },
 		MetricsFile = { boolean = true, string = true },
+		ValidationCallback = { boolean = true, ["function"] = true },
+		ValidationFile = { boolean = true, string = true },
 		Object = { boolean = true, Instance = true },
 		ResumeFile = { boolean = true, string = true },
 		SpecialProperties = { boolean = true, string = true, table = true },
@@ -3887,6 +3895,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			error("MetricsCallback must be false or a function", 3)
 		elseif option == "MetricsFile" and value ~= false and valueType ~= "string" then
 			error("MetricsFile must be false or a string", 3)
+		elseif option == "ValidationCallback" and value ~= false and valueType ~= "function" then
+			error("ValidationCallback must be false or a function", 3)
+		elseif option == "ValidationFile" and value ~= false and valueType ~= "string" then
+			error("ValidationFile must be false or a string", 3)
 		elseif option == "Compatibility" and value ~= "auto" and value ~= "strict" and value ~= "off" then
 			error('Compatibility must be "auto", "strict", or "off"', 3)
 		elseif option == "CompressionMode" and valueType == "string" and value ~= "zstd" and value ~= "lz4" then
@@ -4038,8 +4050,13 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	if OPTIONS.MetricsCallback ~= false or OPTIONS.MetricsFile ~= false then
 		OPTIONS.Metrics = true
 	end
+	if OPTIONS.ValidationCallback ~= false or OPTIONS.ValidationFile ~= false then
+		OPTIONS.ValidateOutput = true
+	end
 
 	local placename
+	local ValidationEnabled = OPTIONS.ValidateOutput == true
+	local ValidationReport
 	local MetricsEnabled = OPTIONS.Metrics == true
 	local MetricsFinalized = false
 	local MetricsReport = MetricsEnabled and {
@@ -4122,6 +4139,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		MetricsReport.outputBytes = totalsize
 		MetricsReport.outputFile = placename
 		MetricsReport.compatibility = CompatibilityReport
+		MetricsReport.validation = ValidationReport
 		MetricsReport.elapsedSeconds = os.clock() - MetricsReport.startedClock
 
 		if MetricsMemoryStart then
@@ -6210,6 +6228,90 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		return chunks
 	end
 
+	local function validateOutput(chunks, ctx)
+		local checks = {}
+		local warnings = { "Structural validation does not prove Studio loadability." }
+		local report = {
+			schemaVersion = 1,
+			tool = "Syn-mod",
+			scope = "structural",
+			binary = OPTIONS.Binary,
+			outputFile = (not CopyToClipboard and not Callback) and placename or nil,
+			outputBytes = totalsize,
+			chunkCount = #chunks,
+			collectedInstances = ctx and ctx.instCount or nil,
+			checks = checks,
+			warnings = warnings,
+		}
+
+		local chunkBytes = 0
+		for _, chunk in chunks do
+			chunkBytes += #chunk
+		end
+		report.chunkBytes = chunkBytes
+		checks.nonEmpty = #chunks > 0 and totalsize > 0
+		checks.chunkSizeMatches = chunkBytes == totalsize
+
+		local firstChunk = chunks[1] or ""
+		local lastChunk = chunks[#chunks] or ""
+		if OPTIONS.Binary then
+			local magic = "\60\114\111\98\108\111\120\33\137\255\13\10\26\10\0\0"
+			checks.formatEnvelope = string.sub(firstChunk, 1, #magic) == magic and string.sub(lastChunk, 1, 4) == "END\0"
+		else
+			checks.formatEnvelope = string.find(firstChunk, '<roblox version="4">', 1, true) ~= nil
+				and string.sub(lastChunk, -9) == "</roblox>"
+		end
+
+		local fileTarget = not CopyToClipboard and not Callback
+		checks.fileTarget = fileTarget
+		local valid = checks.nonEmpty and checks.chunkSizeMatches and checks.formatEnvelope
+
+		if fileTarget then
+			if isfile then
+				local ok, exists = pcall(isfile, placename)
+				checks.fileExists = ok and exists == true
+				if not checks.fileExists then
+					valid = false
+				end
+			end
+
+			if readfile and checks.fileExists ~= false then
+				local ok, contents = pcall(readfile, placename)
+				checks.fileReadable = ok and type(contents) == "string"
+				if checks.fileReadable then
+					report.fileBytes = #contents
+					checks.fileSizeMatches = #contents == totalsize
+				else
+					checks.fileSizeMatches = false
+				end
+				valid = valid and checks.fileReadable and checks.fileSizeMatches
+			end
+		end
+
+		report.valid = valid == true
+
+		local validationCallback = OPTIONS.ValidationCallback
+		if type(validationCallback) == "function" then
+			pcall(validationCallback, report)
+		end
+
+		local validationFile = OPTIONS.ValidationFile
+		if type(validationFile) == "string" and writefile then
+			if fileTarget and validationFile == placename then
+				warnings[#warnings + 1] = "ValidationFile matches outputFile; validation report was not written."
+			else
+				local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, report)
+				if ok then
+					pcall(writefile, validationFile, encoded)
+				else
+					warnings[#warnings + 1] = "Validation report JSON encoding failed."
+				end
+			end
+		end
+
+		return report
+	end
+
 	local function save_game()
 		SaveNotCreatable = SaveNotCreatable
 			or IsolateLocalPlayer
@@ -6576,6 +6678,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			)
 		end
 		metricStageEnd("write", writeStarted)
+
+		if ValidationEnabled then
+			ValidationReport = validateOutput(chunks, ctx)
+		end
 
 		markResumeComplete()
 	end
