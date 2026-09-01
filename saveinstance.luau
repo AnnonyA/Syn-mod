@@ -4086,6 +4086,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			compressionOutputBytes = 0,
 			joinCalls = 0,
 			joinedBytes = 0,
+			streamFlushes = 0,
+			streamedBytes = 0,
+			peakBufferedBytes = 0,
+			chunksReleased = 0,
 		},
 	} or nil
 
@@ -4103,6 +4107,15 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		if MetricsEnabled then
 			local counters = MetricsReport.counters
 			counters[name] = (counters[name] or 0) + (amount or 1)
+		end
+	end
+
+	local function metricMax(name, value)
+		if MetricsEnabled then
+			local counters = MetricsReport.counters
+			if value > (counters[name] or 0) then
+				counters[name] = value
+			end
 		end
 	end
 
@@ -6228,7 +6241,33 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		return chunks
 	end
 
-	local function validateOutput(chunks, ctx)
+	local function buildValidationSnapshot(chunks)
+		local chunkCount = #chunks
+		local chunkBytes = 0
+		for _, chunk in chunks do
+			chunkBytes += #chunk
+		end
+
+		local firstChunk = chunks[1] or ""
+		local lastChunk = chunks[chunkCount] or ""
+		local formatEnvelope
+		if OPTIONS.Binary then
+			local magic = "\60\114\111\98\108\111\120\33\137\255\13\10\26\10\0\0"
+			formatEnvelope = string.sub(firstChunk, 1, #magic) == magic and string.sub(lastChunk, 1, 4) == "END\0"
+		else
+			formatEnvelope = string.find(firstChunk, '<roblox version="4">', 1, true) ~= nil
+				and string.sub(lastChunk, -9) == "</roblox>"
+		end
+
+		return {
+			chunkCount = chunkCount,
+			chunkBytes = chunkBytes,
+			nonEmpty = chunkCount > 0 and totalsize > 0,
+			formatEnvelope = formatEnvelope,
+		}
+	end
+
+	local function validateOutput(snapshot, ctx)
 		local checks = {}
 		local warnings = { "Structural validation does not prove Studio loadability." }
 		local report = {
@@ -6238,29 +6277,16 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			binary = OPTIONS.Binary,
 			outputFile = (not CopyToClipboard and not Callback) and placename or nil,
 			outputBytes = totalsize,
-			chunkCount = #chunks,
+			chunkCount = snapshot.chunkCount,
 			collectedInstances = ctx and ctx.instCount or nil,
 			checks = checks,
 			warnings = warnings,
 		}
 
-		local chunkBytes = 0
-		for _, chunk in chunks do
-			chunkBytes += #chunk
-		end
-		report.chunkBytes = chunkBytes
-		checks.nonEmpty = #chunks > 0 and totalsize > 0
-		checks.chunkSizeMatches = chunkBytes == totalsize
-
-		local firstChunk = chunks[1] or ""
-		local lastChunk = chunks[#chunks] or ""
-		if OPTIONS.Binary then
-			local magic = "\60\114\111\98\108\111\120\33\137\255\13\10\26\10\0\0"
-			checks.formatEnvelope = string.sub(firstChunk, 1, #magic) == magic and string.sub(lastChunk, 1, 4) == "END\0"
-		else
-			checks.formatEnvelope = string.find(firstChunk, '<roblox version="4">', 1, true) ~= nil
-				and string.sub(lastChunk, -9) == "</roblox>"
-		end
+		report.chunkBytes = snapshot.chunkBytes
+		checks.nonEmpty = snapshot.nonEmpty
+		checks.chunkSizeMatches = snapshot.chunkBytes == totalsize
+		checks.formatEnvelope = snapshot.formatEnvelope
 
 		local fileTarget = not CopyToClipboard and not Callback
 		checks.fileTarget = fileTarget
@@ -6601,6 +6627,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			stampElapsed(chunks, os.clock() - elapse_t)
 		end
 
+		local ValidationSnapshot
+		if ValidationEnabled then
+			ValidationSnapshot = buildValidationSnapshot(chunks)
+		end
+
 		markResumeWriting()
 
 		local joinChunks = table.concat
@@ -6621,25 +6652,35 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		elseif Callback then
 			Callback(joinChunks(chunks), chunks)
 		elseif OPTIONS.AlternativeWritefile and appendfile then
-			-- Batch chunks into ~4MB appends: sizes come from #chunk, so nothing
-			-- is joined until a batch actually flushes. A whole-file concat would
-			-- overflow on large places.
+			-- Keep append batches bounded and release source chunk references as
+			-- soon as their bytes are retained by the current batch or written.
 			local SEGMENT_SIZE = 4145728
 			local batch, batchSize, written = {}, 0, 0
+			local chunkCount = #chunks
+
+			local function recordStreamWrite(byteCount, bufferedBytes)
+				metricCount("streamFlushes")
+				metricCount("streamedBytes", byteCount)
+				metricMax("peakBufferedBytes", bufferedBytes)
+			end
 
 			local function flush()
 				if batchSize == 0 then
 					return
 				end
-				written += batchSize
+				local payload = joinChunks(batch)
+				local payloadSize = #payload
+				metricMax("peakBufferedBytes", batchSize)
+				written += payloadSize
 				run_with_loading(
 					"Writing to File " .. math.round(written / totalsize * 100) .. "%",
 					nil,
 					false,
 					appendfile,
 					placename,
-					joinChunks(batch)
+					payload
 				)
+				recordStreamWrite(payloadSize, batchSize)
 				table.clear(batch)
 				batchSize = 0
 				task.wait()
@@ -6647,19 +6688,32 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 			writefile(placename, "")
 
-			for _, chunk in chunks do
-				if #chunk >= SEGMENT_SIZE then
+			for index = 1, chunkCount do
+				local chunk = chunks[index]
+				local chunkSize = #chunk
+				if chunkSize >= SEGMENT_SIZE then
 					flush()
 					local offset = 1
-					while offset <= #chunk do
-						appendfile(placename, string.sub(chunk, offset, offset + SEGMENT_SIZE - 1))
+					while offset <= chunkSize do
+						local segment = string.sub(chunk, offset, offset + SEGMENT_SIZE - 1)
+						local segmentSize = #segment
+						appendfile(placename, segment)
+						written += segmentSize
+						recordStreamWrite(segmentSize, segmentSize)
 						offset += SEGMENT_SIZE
 						task.wait()
 					end
-					written += #chunk
+					chunks[index] = nil
+					metricCount("chunksReleased")
 				else
+					if batchSize > 0 and batchSize + #chunk > SEGMENT_SIZE then
+						flush()
+					end
 					batch[#batch + 1] = chunk
-					batchSize += #chunk
+					batchSize += chunkSize
+					chunks[index] = nil
+					metricCount("chunksReleased")
+					metricMax("peakBufferedBytes", batchSize)
 					if batchSize >= SEGMENT_SIZE then
 						flush()
 					end
@@ -6668,19 +6722,24 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 			flush()
 		elseif writefile then
+			local chunkCount = #chunks
+			local joined = joinChunks(chunks)
+			metricMax("peakBufferedBytes", #joined)
+			table.clear(chunks)
+			metricCount("chunksReleased", chunkCount)
 			run_with_loading(
 				"Writing " .. get_size_format() .. " to File",
 				nil,
 				true,
 				writefile,
 				placename,
-				joinChunks(chunks)
+				joined
 			)
 		end
 		metricStageEnd("write", writeStarted)
 
 		if ValidationEnabled then
-			ValidationReport = validateOutput(chunks, ctx)
+			ValidationReport = validateOutput(ValidationSnapshot, ctx)
 		end
 
 		markResumeComplete()
