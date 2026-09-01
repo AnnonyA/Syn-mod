@@ -2,6 +2,35 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Metrics, benchmark, and compatibility
+
+### Observability
+
+- Added opt-in `Metrics`, `MetricsCallback`, and `MetricsFile` reporting.
+- Added stage timings for collection, serialization, writing, and aggregate decompilation time.
+- Added counters for collected instances, property reads/serialization, decompiler attempts/results/cache hits, failed property-read operations, and recovery skips.
+- Added output-byte reporting and `gcinfo()` start/end/delta observations when available.
+
+### Performance
+
+- Kept metrics disabled by default and routes property reads directly to the existing core path when instrumentation is off.
+- Added a weak instance-path cache used only when crash recovery is enabled.
+- Reused a single recovery-point computation per skip/checkpoint operation instead of rebuilding the same instance path repeatedly.
+
+### Compatibility
+
+- Added `Compatibility = "auto" | "strict" | "off"`, defaulting to `"auto"`.
+- Added capability reporting for `writefile`, `appendfile`, `gethiddenproperty`, `getscriptbytecode`, zstd, and lz4.
+- Added conservative automatic fallbacks for unavailable appendfile, bytecode, and compression paths.
+- Added strict mode for callers that prefer explicit failure over automatic adjustment.
+
+### Benchmarking and verification
+
+- Added `bench/compare.luau` to measure pinned upstream and Syn-mod under equivalent options with alternating run order.
+- Added machine-readable JSON and human-readable text benchmark output.
+- Added regression checks for metrics, compatibility, recovery hot paths, and the benchmark contract.
+- CI now compiles both the generated saveinstance and benchmark harness with the pinned Luau compiler.
+
 ## 2026-09-01
 
 ### Recovery v2

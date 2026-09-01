@@ -1,0 +1,192 @@
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -4214,7 +4423,7 @@
+ 
+ 	local SharedBinaryStrings = OPTIONS.SharedBinaryStrings
+ 
+-	local ToSaveList, ldecompile, placename, elapse_t, SaveNotCreatableWillBeEnabled, RecoveredScripts
++	local ToSaveList, ldecompile, elapse_t, SaveNotCreatableWillBeEnabled, RecoveredScripts
+ 
+ 	if OPTIONS.ReadMe then
+ 		RecoveredScripts = {}
+@@ -4441,24 +4650,32 @@
+ 		ResumeFile = "USSI_resume_" .. tostring(game.PlaceId) .. ".json"
+ 	end
+ 
+-	local ResumeIdentity = table.concat({
+-		tostring(game.PlaceId),
+-		tostring(OPTIONS.mode),
+-		tostring(ResumeScope),
+-		Object and Object:GetFullName() or "game",
+-	}, "|")
+-	local ResumeState
+-	local ResumeSkipMap = {}
++	local ResumePathCache = ResumeEnabled and setmetatable({}, { __mode = "k" }) or nil
+ 
+ 	local function resumeInstancePath(instance)
++		local cached = ResumePathCache[instance]
++		if cached then
++			return cached
++		end
++
+ 		local ok, path = pcall(instance.GetFullName, instance)
+-		if ok and type(path) == "string" then
+-			return path
++		if not ok or type(path) ~= "string" then
++			path = instance.ClassName .. ":" .. instance.Name
+ 		end
+ 
+-		return instance.ClassName .. ":" .. instance.Name
++		ResumePathCache[instance] = path
++		return path
+ 	end
+ 
++	local ResumeIdentity = ResumeEnabled and table.concat({
++		tostring(game.PlaceId),
++		tostring(OPTIONS.mode),
++		tostring(ResumeScope),
++		Object and resumeInstancePath(Object) or "game",
++	}, "|") or nil
++	local ResumeState
++	local ResumeSkipMap = {}
++
+ 	local function resumePointKey(className, propertyName, instancePath)
+ 		local key = className .. "\0" .. propertyName
+ 		if ResumeScope == "instance" then
+@@ -4530,17 +4747,29 @@
+ 		persistResumeState()
+ 	end
+ 
++	local function resumePointFor(instance, propertyName)
++		local instancePath = ResumeScope == "instance" and resumeInstancePath(instance) or nil
++		return resumePointKey(instance.ClassName, propertyName, instancePath), instancePath
++	end
++
+ 	local function resumeShouldSkip(instance, propertyName)
+-		return ResumeEnabled
+-			and ResumeSkipMap[resumePointKey(instance.ClassName, propertyName, resumeInstancePath(instance))] == true
++		if not ResumeEnabled then
++			return false
++		end
++		local point = resumePointFor(instance, propertyName)
++		local skip = ResumeSkipMap[point] == true
++		if skip then
++			metricCount("resumeSkips")
++		end
++		return skip
+ 	end
+ 
+ 	local function resumeBeforeRiskyRead(instance, propertyName, valueType)
+ 		if not ResumeEnabled then return end
+-		local instancePath = resumeInstancePath(instance)
++		local point, instancePath = resumePointFor(instance, propertyName)
+ 		ResumeState.status = "reading"
+ 		ResumeState.current = {
+-			key = resumePointKey(instance.ClassName, propertyName, instancePath), class = instance.ClassName,
++			key = point, class = instance.ClassName,
+ 			property = propertyName, valueType = valueType, instance = instancePath,
+ 		}
+ 		ResumeState.updatedAt = os.time()
+@@ -4781,6 +5010,7 @@
+ 				end
+ 
+ 				if cached then
++					metricCount("decompileCacheHits")
+ 					if __DEBUG_MODE then
+ 						__DEBUG_MODE("Found in Cache", script:GetFullName())
+ 					end
+@@ -4794,16 +5024,23 @@
+ 				-- task.wait() -- TODO Maybe remove?
+ 			end
+ 
++			metricCount("decompileAttempted")
++			local decompileStarted = MetricsEnabled and os.clock() or nil
+ 			local ok, result = run_with_loading("Decompiling " .. script.Name, true, nil, decomp, script)
++			if decompileStarted then
++				metricAddTime("decompile", os.clock() - decompileStarted)
++			end
+ 			if not result then
+ 				ok, result = false, "Empty Output"
+ 			end
+ 
+ 			local output
+ 			if ok then
++				metricCount("decompileSucceeded")
+ 				result = string.gsub(result, "\0", "\\0") -- ? Some decompilers sadly output \0 which prevents files from opening
+ 				output = result
+ 			else
++				metricCount("decompileFailed")
+ 				output = "--[[ Failed to decompile. Reason:\n" .. (result or "") .. "\n]]"
+ 			end
+ 
+@@ -5031,11 +5268,11 @@
+ 		saveGHPState()
+ 	end
+ 
+-	local function readProperty(instance, property)
++	local function readPropertyCore(instance, property)
+ 		local PropertyName, ValueType, CanRead, Special =
+ 			property.Name, property.ValueType, property.CanRead, property.Special
+ 
+-		if resumeShouldSkip(instance, PropertyName) then
++		if ResumeEnabled and resumeShouldSkip(instance, PropertyName) then
+ 			return __BREAK
+ 		end
+ 
+@@ -5080,9 +5317,16 @@
+ 				if property.Shadows and GHPShadowed then
+ 					property.CanRead = false
+ 				elseif gethiddenproperty and ghpDatatypeAllowed(GHPKey) then
+-					resumeBeforeRiskyRead(instance, PropertyName, ValueType)
++					if ResumeEnabled then
++						resumeBeforeRiskyRead(instance, PropertyName, ValueType)
++					end
+ 					local ok, result = pcall(gethiddenproperty, instance, PropertyName)
+-					resumeAfterRiskyRead()
++					if ResumeEnabled then
++						resumeAfterRiskyRead()
++					end
++					if not ok then
++						metricCount("propertyReadFailures")
++					end
+ 					if ok then
+ 						raw = result
+ 					end
+@@ -5109,9 +5353,16 @@
+ 				if ok then
+ 					raw = result
+ 				elseif not (property.Shadows and GHPShadowed) and gethiddenproperty and ghpDatatypeAllowed(GHPKey) then
+-					resumeBeforeRiskyRead(instance, PropertyName, ValueType)
++					if ResumeEnabled then
++						resumeBeforeRiskyRead(instance, PropertyName, ValueType)
++					end
+ 					ok, result = pcall(gethiddenproperty, instance, PropertyName)
+-					resumeAfterRiskyRead()
++					if ResumeEnabled then
++						resumeAfterRiskyRead()
++					end
++					if not ok then
++						metricCount("propertyReadFailures")
++					end
+ 					ghpDatatypeReport(GHPKey, ok and not filterPropVal(result, property, Category, Optional))
+ 					if ok then
+ 						raw = result
+@@ -5139,9 +5390,16 @@
+ 		end
+ 
+ 		if not GHPFFailed then
+-			resumeBeforeRiskyRead(instance, PropertyName, ValueType)
++			if ResumeEnabled then
++				resumeBeforeRiskyRead(instance, PropertyName, ValueType)
++			end
+ 			local ok, result = pcall(gethiddenproperty_fallback, instance, PropertyName)
+-			resumeAfterRiskyRead()
++			if ResumeEnabled then
++				resumeAfterRiskyRead()
++			end
++			if not ok then
++				metricCount("propertyReadFailures")
++			end
+ 			if result == nil and not nilIsValid(Category, Optional) then
+ 				ok = nil
+ 			end

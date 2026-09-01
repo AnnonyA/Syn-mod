@@ -5,6 +5,7 @@ on:
     paths:
       - modifications.patch
       - patches/**
+      - bench/**
       - tests/**
       - scripts/**
       - .github/workflows/build-saveinstance.yml
@@ -45,12 +46,17 @@ jobs:
           git apply modifications.patch
           git apply --check patches/recovery-v2.patch
           git apply patches/recovery-v2.patch
+          for patch in patches/performance-compat-v1/*.patch; do
+            git apply --check "$patch"
+            git apply "$patch"
+          done
 
       - name: Run regression checks
         shell: bash
         run: |
           set -euo pipefail
           python tests/test_mod_features.py
+          python tests/test_performance_compat.py
           python scripts/verify_build.py
 
       - name: Build pinned Luau compiler
@@ -75,6 +81,7 @@ jobs:
             exit 1
           fi
           "$compiler" saveinstance.luau >/dev/null
+          "$compiler" bench/compare.luau >/dev/null
 
       - name: Commit generated build
         shell: bash

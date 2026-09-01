@@ -1,0 +1,127 @@
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -5166,6 +5424,20 @@
+ 		return __BREAK
+ 	end
+ 
++	local readProperty = readPropertyCore
++	if MetricsEnabled then
++		readProperty = function(instance, property)
++			metricCount("propertiesAttempted")
++			local raw = readPropertyCore(instance, property)
++			if raw == __BREAK then
++				metricCount("propertiesSkipped")
++			else
++				metricCount("propertiesSaved")
++			end
++			return raw
++		end
++	end
++
+ 	local function ReturnItem(className, instance)
+ 		return '<Item class="' .. className .. '" referent="' .. getRef(instance) .. '"><Properties>' -- TODO: Ideally this shouldn't return <Properties> as well as the line below to close it IF  IgnorePropertiesOfNotScriptsOnScriptsMode is Enabled OR If all properties are default (reduces file size by at least 1.4%)
+ 	end
+@@ -5607,6 +5879,7 @@
+ 						local chunk = buildChunk("PROP", propBuf, compress)
+ 						propChunks[#propChunks + 1] = chunk
+ 						totalsize += chunk.len + (chunk.str and #chunk.str or chunk.tailLen or 0)
++						metricCount("propertiesSerialized", #objs)
+ 					else
+ 						warn("UNSUPPORTED BINARY TYPE (OPEN A GITHUB ISSUE): ", propName, binaryType)
+ 					end
+@@ -5844,6 +6117,7 @@
+ 						if tag then
+ 							savebuffer[savebuffer_size] = ReturnProperty(tag, PropertyName, value)
+ 							savebuffer_size += 1
++							metricCount("propertiesSerialized")
+ 						else
+ 							warn("UNSUPPORTED XML TYPE (OPEN A GITHUB ISSUE): ", PropertyName, ValueType)
+ 						end
+@@ -6110,7 +6384,12 @@
+ 			end
+ 		end
+ 
++		local collectStarted = metricStageBegin("collect")
+ 		local ctx = collect(allRoots)
++		metricStageEnd("collect", collectStarted)
++		if MetricsEnabled then
++			MetricsReport.counters.instancesCollected = ctx.instCount
++		end
+ 
+ 		-- collect filtered and deduped; recover each extra's surviving roots.
+ 		for _, extra in pendingExtras do
+@@ -6173,7 +6452,12 @@
+ 		end
+ 		ctx.mainRoots = mainRoots
+ 
++		local serializeStarted = metricStageBegin("serialize")
+ 		local chunks = OPTIONS.Binary and emitBinary(ctx) or emitXML(ctx)
++		metricStageEnd("serialize", serializeStarted)
++		if MetricsEnabled then
++			MetricsReport.outputBytes = totalsize
++		end
+ 
+ 		if OPTIONS.ReadMe then
+ 			stampElapsed(chunks, os.clock() - elapse_t)
+@@ -6181,6 +6465,7 @@
+ 
+ 		markResumeWriting()
+ 
++		local writeStarted = metricStageBegin("write")
+ 		if CopyToClipboard then
+ 			setrbxclipboard(table.concat(chunks))
+ 		elseif Callback then
+@@ -6242,6 +6527,7 @@
+ 				table.concat(chunks)
+ 			)
+ 		end
++		metricStageEnd("write", writeStarted)
+ 
+ 		markResumeComplete()
+ 	end
+@@ -6726,8 +7012,10 @@
+ 			)
+ 
+ 			if not base64encode then
+-				warn("base64encode not found")
++				local message = "base64encode not found"
++				warn(message)
+ 				Cleanup()
++				finalizeMetrics(false, message)
+ 				return
+ 			end
+ 
+@@ -6820,6 +7108,14 @@
+ 			lz4compress = pickFastestBy("lz4compress", { lz4compress, llz4_compress }, lz4Works, 10, COMPRESS_TEST)
+ 		end
+ 
++		applyCompatibilityProfile(true)
++		if #CompatibilityStrictErrors > 0 then
++			local message = "Compatibility strict mode: " .. table.concat(CompatibilityStrictErrors, "; ")
++			Cleanup()
++			finalizeMetrics(false, message)
++			error(message, 2)
++		end
++
+ 		do
+ 			local ok, result = pcall(FetchAPI)
+ 			if ok then
+@@ -6828,6 +7124,7 @@
+ 				warn("Failed to load the API Dump")
+ 				warn(result)
+ 				Cleanup()
++				finalizeMetrics(false, result)
+ 				return
+ 			end
+ 		end
+@@ -6858,6 +7155,10 @@
+ 	Cleanup()
+ 
+ 	elapse_t = os.clock() - elapse_t
++	if MetricsEnabled then
++		MetricsReport.saveGameSeconds = elapse_t
++	end
++	finalizeMetrics(ok, err)
+ 	local Log10 = math.log10(elapse_t)
+ 	local ExtraTime = 10
+ 

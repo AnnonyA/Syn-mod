@@ -42,7 +42,7 @@ require('resume state v2', 'version = 2' in SOURCE)
 require('bounded skip history', 'while #skipped > ResumeMaxSkips do' in SOURCE and 'table.remove(skipped, 1)' in SOURCE)
 require(
     'instance-scoped skip lookup',
-    'resumePointKey(instance.ClassName, propertyName, resumeInstancePath(instance))' in SOURCE,
+    'local point = resumePointFor(instance, propertyName)' in SOURCE,
 )
 require('class scope available', 'if ResumeScope == "instance" then' in SOURCE)
 require('checkpoint before risky read', 'resumeBeforeRiskyRead(instance, PropertyName, ValueType)' in SOURCE)

@@ -1,0 +1,47 @@
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -3605,6 +3605,10 @@
+ --- @field ResumeScope string -- Controls how learned crash points are matched. `"instance"` skips only the same instance path + class + property; `"class"` skips that property for every instance of the class. ___Default:___ `"instance"`
+ --- @field ResumeMaxSkips number -- Maximum learned crash points kept in the checkpoint. Oldest entries are discarded first to keep recovery state bounded. ___Default:___ 256
+ --- @field ClearResumeState boolean -- Clears learned crash-skip points at the start of this run before ResumeOnCrash begins tracking again. ___Default:___ false
++--- @field Metrics boolean -- Enables structured save metrics. Disabled by default so normal saves do not pay instrumentation allocation costs. ___Default:___ false
++--- @field MetricsCallback {boolean|function} -- Optional callback receiving the final metrics report table. Setting this also enables Metrics. ___Default:___ false
++--- @field MetricsFile {boolean|string} -- Optional JSON path for the final metrics report. Setting this also enables Metrics. Requires writefile. ___Default:___ false
++--- @field Compatibility string -- Executor capability policy. `"auto"` applies conservative fallbacks, `"strict"` errors when explicitly requested capabilities are unavailable, and `"off"` leaves options untouched. ___Default:___ `"auto"`
+ --- @field IsolateStarterPlayer boolean -- Saves StarterPlayer as separate folder, children of the original instance will be ignored. ___Default:___ false
+ --- @field IsolatePlayers boolean -- Saves All Players as separate folder, children of the original instance will be ignored. ___Default:___ false
+ --- @field IsolateLocalPlayer boolean -- Saves LocalPlayer as separate folder, original instance will be ignored. ___Default:___ false
+@@ -3747,6 +3751,11 @@
+ 		ResumeMaxSkips = 256,
+ 		ClearResumeState = false,
+ 
++		Metrics = false,
++		MetricsCallback = false,
++		MetricsFile = false,
++		Compatibility = "auto",
++
+ 		IsolateLocalPlayer = false, --  #service.StarterGui:GetChildren() == 0
+ 		IsolateLocalPlayerCharacter = false,
+ 		IsolatePlayers = false,
+@@ -3825,6 +3834,8 @@
+ 		Callback = { boolean = true, ["function"] = true },
+ 		CompressionMode = { boolean = true, string = true },
+ 		FilePath = { boolean = true, string = true },
++		MetricsCallback = { boolean = true, ["function"] = true },
++		MetricsFile = { boolean = true, string = true },
+ 		Object = { boolean = true, Instance = true },
+ 		ResumeFile = { boolean = true, string = true },
+ 		SpecialProperties = { boolean = true, string = true, table = true },
+@@ -3872,6 +3883,12 @@
+ 			error('ResumeScope must be "instance" or "class"', 3)
+ 		elseif option == "ResumeMaxSkips" and (value < 1 or value % 1 ~= 0) then
+ 			error("ResumeMaxSkips must be a positive integer", 3)
++		elseif option == "MetricsCallback" and value ~= false and valueType ~= "function" then
++			error("MetricsCallback must be false or a function", 3)
++		elseif option == "MetricsFile" and value ~= false and valueType ~= "string" then
++			error("MetricsFile must be false or a string", 3)
++		elseif option == "Compatibility" and value ~= "auto" and value ~= "strict" and value ~= "off" then
++			error('Compatibility must be "auto", "strict", or "off"', 3)
+ 		elseif option == "CompressionMode" and valueType == "string" and value ~= "zstd" and value ~= "lz4" then
+ 			error('CompressionMode string must be "zstd" or "lz4"', 3)
+ 		elseif option == "CompressionLevel" and (value < -7 or value > 22) then

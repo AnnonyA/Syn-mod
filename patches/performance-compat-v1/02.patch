@@ -1,0 +1,215 @@
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -4018,6 +4035,110 @@
+ 		end
+ 	end
+ 
++	if OPTIONS.MetricsCallback ~= false or OPTIONS.MetricsFile ~= false then
++		OPTIONS.Metrics = true
++	end
++
++	local placename
++	local MetricsEnabled = OPTIONS.Metrics == true
++	local MetricsFinalized = false
++	local MetricsReport = MetricsEnabled and {
++		schemaVersion = 1,
++		tool = "Syn-mod",
++		executor = EXECUTOR_NAME ~= "" and EXECUTOR_NAME or "Unknown",
++		mode = OPTIONS.mode,
++		binary = OPTIONS.Binary,
++		startedClock = os.clock(),
++		stages = {},
++		counters = {
++			instancesCollected = 0,
++			propertiesAttempted = 0,
++			propertiesSaved = 0,
++			propertiesSerialized = 0,
++			propertiesSkipped = 0,
++			propertyReadFailures = 0,
++			decompileAttempted = 0,
++			decompileSucceeded = 0,
++			decompileFailed = 0,
++			decompileCacheHits = 0,
++			resumeSkips = 0,
++		},
++	} or nil
++
++	local MetricsMemoryStart
++	if MetricsEnabled and type(gcinfo) == "function" then
++		local ok, value = pcall(gcinfo)
++		if ok and type(value) == "number" then
++			MetricsMemoryStart = value
++		end
++	end
++
++	local CompatibilityReport
++
++	local function metricCount(name, amount)
++		if MetricsEnabled then
++			local counters = MetricsReport.counters
++			counters[name] = (counters[name] or 0) + (amount or 1)
++		end
++	end
++
++	local function metricStageBegin(name)
++		if MetricsEnabled then
++			return os.clock()
++		end
++	end
++
++	local function metricStageEnd(name, started)
++		if MetricsEnabled and started then
++			local elapsed = os.clock() - started
++			MetricsReport.stages[name] = (MetricsReport.stages[name] or 0) + elapsed
++			return elapsed
++		end
++	end
++
++	local function metricAddTime(name, elapsed)
++		if MetricsEnabled and elapsed then
++			MetricsReport.stages[name] = (MetricsReport.stages[name] or 0) + elapsed
++		end
++	end
++
++	local function finalizeMetrics(success, errorMessage)
++		if not MetricsEnabled or MetricsFinalized then
++			return MetricsReport
++		end
++
++		MetricsFinalized = true
++		MetricsReport.success = success == true
++		MetricsReport.error = success and nil or tostring(errorMessage or "unknown error")
++		MetricsReport.mode = OPTIONS.mode
++		MetricsReport.binary = OPTIONS.Binary
++		MetricsReport.outputBytes = totalsize
++		MetricsReport.outputFile = placename
++		MetricsReport.compatibility = CompatibilityReport
++		MetricsReport.elapsedSeconds = os.clock() - MetricsReport.startedClock
++
++		if MetricsMemoryStart then
++			MetricsReport.memoryKbStart = MetricsMemoryStart
++			local ok, value = pcall(gcinfo)
++			if ok and type(value) == "number" then
++				MetricsReport.memoryKbEnd = value
++				MetricsReport.memoryKbDelta = value - MetricsMemoryStart
++			end
++		end
++
++		local metricsCallback = OPTIONS.MetricsCallback
++		if type(metricsCallback) == "function" then
++			pcall(metricsCallback, MetricsReport)
++		end
++
++		local metricsFile = OPTIONS.MetricsFile
++		if type(metricsFile) == "string" and writefile then
++			pcall(writefile, metricsFile, service.HttpService:JSONEncode(MetricsReport))
++		end
++
++		return MetricsReport
++	end
++
+ 	local function applyModePresets(mode)
+ 		mode = string.lower(mode)
+ 
+@@ -4074,6 +4195,7 @@
+ 		warn(text)
+ 
+ 		GLOBAL_ENV.USSI = nil
++		finalizeMetrics(false, text)
+ 		return
+ 	end
+ 
+@@ -4100,6 +4222,93 @@
+ 	local CompressionLevel = OPTIONS.CompressionLevel
+ 	local CompressionMode = OPTIONS.CompressionMode
+ 
++	CompatibilityReport = {
++		mode = OPTIONS.Compatibility,
++		executor = EXECUTOR_NAME ~= "" and EXECUTOR_NAME or "Unknown",
++		capabilities = {
++			writefile = writefile ~= nil,
++			appendfile = appendfile ~= nil,
++			gethiddenproperty = gethiddenproperty ~= nil,
++			getscriptbytecode = getscriptbytecode ~= nil,
++			zstdcompress = zstdcompress ~= nil,
++			lz4compress = lz4compress ~= nil,
++		},
++		adjustments = {},
++	}
++
++	local CompatibilityAppliedEarly = false
++	local CompatibilityStrictErrors = {}
++	local function applyCompatibilityProfile(compressionReady)
++		local mode = OPTIONS.Compatibility
++		local capabilities = CompatibilityReport.capabilities
++		capabilities.writefile = writefile ~= nil
++		capabilities.appendfile = appendfile ~= nil
++		capabilities.gethiddenproperty = gethiddenproperty ~= nil
++		capabilities.getscriptbytecode = getscriptbytecode ~= nil
++		capabilities.zstdcompress = zstdcompress ~= nil
++		capabilities.lz4compress = lz4compress ~= nil
++
++		if mode == "off" then
++			return
++		end
++
++		local function strictFailure(message)
++			CompatibilityStrictErrors[#CompatibilityStrictErrors + 1] = message
++		end
++
++		local function adjust(key, fromValue, toValue, reason)
++			CompatibilityReport.adjustments[#CompatibilityReport.adjustments + 1] = {
++				option = key, from = fromValue, to = toValue, reason = reason,
++			}
++			OPTIONS[key] = toValue
++		end
++
++		if not CompatibilityAppliedEarly then
++			CompatibilityAppliedEarly = true
++
++			if OPTIONS.AlternativeWritefile and not appendfile then
++				if mode == "strict" then
++					strictFailure("AlternativeWritefile requires appendfile")
++				else
++					adjust("AlternativeWritefile", true, false, "appendfile unavailable")
++				end
++			end
++
++			if OPTIONS.SaveBytecode and not getscriptbytecode then
++				if mode == "strict" then
++					strictFailure("SaveBytecode requires getscriptbytecode")
++				else
++					adjust("SaveBytecode", true, false, "getscriptbytecode unavailable")
++				end
++			end
++		end
++
++		if not compressionReady then
++			return
++		end
++
++		local requested = OPTIONS.CompressionMode
++		local fallback
++		if requested == "zstd" and not zstdcompress then
++			fallback = lz4compress and "lz4" or false
++		elseif requested == "lz4" and not lz4compress then
++			fallback = zstdcompress and "zstd" or false
++		end
++
++		if fallback ~= nil then
++			if mode == "strict" then
++				strictFailure("requested compression backend is unavailable: " .. tostring(requested))
++			else
++				CompatibilityReport.compressionFallback = { from = requested, to = fallback }
++				adjust("CompressionMode", requested, fallback, "requested compression backend unavailable")
++			end
++		end
++
++		CompressionMode = OPTIONS.CompressionMode
++	end
++
++	applyCompatibilityProfile(false)
++
+ 	local __DEBUG_MODE = OPTIONS.__DEBUG_MODE
+ 
+ 	if __DEBUG_MODE and type(__DEBUG_MODE) ~= "function" then
