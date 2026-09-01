@@ -68,6 +68,8 @@ jobs:
           git apply patches/recovery-isfile-guard-v1.patch
           git apply --check patches/validation-file-write-warning-v1.patch
           git apply patches/validation-file-write-warning-v1.patch
+          git apply --check patches/validation-isfile-fallback-v1.patch
+          git apply patches/validation-isfile-fallback-v1.patch
 
       - name: Run regression checks
         shell: bash
