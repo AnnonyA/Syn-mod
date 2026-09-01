@@ -6516,7 +6516,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				end)
 			) or "Unknown"
 
-			local executorName = identify_executor and table.concat({ identify_executor() }, " ") or "Unknown"
+			local executorName = table.concat({ identifyExecutorSafe() }, " ")
+			if executorName == "" then
+				executorName = "Unknown"
+			end
 
 			local metaFooter = table.concat({
 				"\n\n\t\tElapsed time: ",
