@@ -62,6 +62,10 @@ require('validation scope structural', 'scope = "structural"' in SOURCE)
 require('validation chunk size check', 'chunkSizeMatches' in SOURCE)
 require('validation envelope check', 'formatEnvelope' in SOURCE)
 require('validation file existence check', 'fileExists' in SOURCE)
+require(
+    'validation failed isfile probe does not block readback',
+    'checks.fileExists = exists == true' in SOURCE and 'checks.fileExists = ok and exists == true' not in SOURCE,
+)
 require('validation file size check', 'fileSizeMatches' in SOURCE)
 require('validation readback envelope check', 'fileEnvelopeMatches' in SOURCE)
 require(
