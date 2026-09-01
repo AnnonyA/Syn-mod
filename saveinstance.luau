@@ -5250,6 +5250,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local GHP_STATE_FILE = USSI_FOLDER .. "GHP_STATE.json"
 	local GHPDatatypeState = {}
+	local GHPStateStore = {}
 	local GHPPersisted = {}
 	local GHPVersionKey
 	local GHPShadowed = true -- true when ghp returns the shadowed (parent) property value instead of the shadow
@@ -5273,8 +5274,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			local ok, decoded = pcall(function()
 				return service.HttpService:JSONDecode(readfile(GHP_STATE_FILE))
 			end)
-			if ok and type(decoded) == "table" and type(decoded[GHPVersionKey]) == "table" then
-				GHPPersisted = decoded[GHPVersionKey]
+			if ok and type(decoded) == "table" then
+				GHPStateStore = decoded
+				if type(GHPStateStore[GHPVersionKey]) == "table" then
+					GHPPersisted = GHPStateStore[GHPVersionKey]
+				end
 			end
 		end
 	end
@@ -5283,7 +5287,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		if not writefile then
 			return
 		end
-		pcall(writefile, GHP_STATE_FILE, service.HttpService:JSONEncode({ [GHPVersionKey] = GHPPersisted }))
+		GHPStateStore[GHPVersionKey] = GHPPersisted
+		pcall(writefile, GHP_STATE_FILE, service.HttpService:JSONEncode(GHPStateStore))
 	end
 
 	local function ghpDatatypeAllowed(valueType)
