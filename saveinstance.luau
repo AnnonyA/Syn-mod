@@ -5093,7 +5093,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				output = "--[[ Failed to decompile. Reason:\n" .. (result or "") .. "\n]]"
 			end
 
-			if ScriptCache and bytecode then -- TODO there might(?) be an edgecase where it manages to decompile (built-in) even though getscriptbytecode failed, and the output won't get cached
+			if ScriptCache and bytecode and ok then -- TODO there might(?) be an edgecase where it manages to decompile (built-in) even though getscriptbytecode failed, and the output won't get cached
 				ldeccache[bytecode] = output -- ? Should we cache even if it timed out?
 				if __DEBUG_MODE then
 					__DEBUG_MODE("Cached", script:GetFullName())
