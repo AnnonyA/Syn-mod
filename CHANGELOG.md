@@ -2,6 +2,30 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Memory/Streaming v1
+
+### Write buffering
+
+- Added a compact validation snapshot so post-save validation no longer requires the generated chunk strings to remain populated throughout the write phase.
+- Tightened the `AlternativeWritefile` path so a pending append batch is flushed before adding another small chunk would exceed the configured segment threshold.
+- Release original chunk references progressively after their bytes are retained by the current append batch or written as a large-chunk segment.
+- Clear the source chunk table after the fallback whole-file join so those references can be released before the final `writefile` call.
+- Kept the serialized Binary/XML formats and public saveinstance API unchanged.
+
+### Observability
+
+- Added `streamFlushes`, `streamedBytes`, `peakBufferedBytes`, and `chunksReleased` counters to opt-in Metrics.
+- `peakBufferedBytes` records the largest write buffer/payload observed by this path; it is **not** a measurement of total process peak memory.
+- This is bounded write/output streaming, not a fully streaming serializer: the serializers still produce their chunk list before the write stage begins.
+- No process-RAM improvement is claimed until real executor measurements are collected.
+
+### Verification
+
+- Added a dedicated Memory/Streaming v1 regression contract before the implementation.
+- Added streaming markers to generated-build structural verification.
+- Added the focused memory-streaming patch to the reproducible build chain.
+- Verified the complete patch chain, regression suite, and pinned Luau compilation on the feature branch.
+
 ## 2026-09-01 — Post-save validation v1
 
 ### Structural validation
