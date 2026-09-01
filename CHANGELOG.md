@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Recovery file-probe guard
+
+### Recovery and executor compatibility
+
+- Crash-recovery startup now protects the `isfile(ResumeFile)` probe with `pcall` before attempting to read a previous checkpoint.
+- Executors that expose `isfile` but throw while probing the recovery file now fall back to starting without a readable previous checkpoint instead of aborting the save during recovery initialization.
+- Existing valid checkpoint loading, recovery-state format, options, and the public saveinstance API are unchanged.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically at the unprotected recovery-file probe.
+- Added the focused recovery probe patch after the existing successful-only decompile-cache patch in the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, and pinned Luau compilation before publishing.
+
 ## 2026-09-01 — Successful-only decompile caching
 
 ### Fidelity and cache reliability
