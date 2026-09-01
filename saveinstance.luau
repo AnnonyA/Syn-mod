@@ -6314,9 +6314,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		if fileTarget then
 			if isfile then
 				local ok, exists = pcall(isfile, placename)
-				checks.fileExists = ok and exists == true
-				if not checks.fileExists then
-					valid = false
+				if ok then
+					checks.fileExists = exists == true
+					if not checks.fileExists then
+						valid = false
+					end
 				end
 			end
 
