@@ -18,6 +18,49 @@ The generated build is currently based on upstream commit `3ba234b586868f8ca2a00
 
 `Syn-mod` is a test/experimental modification of the upstream saveinstance implementation. The goal is to try focused compatibility, reliability, and configuration improvements while keeping the upstream provenance explicit and the modified build reproducible.
 
+## Quick start
+
+```luau
+local Params = {
+    RepoURL = "https://raw.githubusercontent.com/AnnonyA/Syn-mod/main/",
+    SSI = "saveinstance",
+}
+
+local synsaveinstance = loadstring(
+    game:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true),
+    Params.SSI
+)()
+
+local Options = {}
+
+synsaveinstance(Options)
+```
+
+Example with Syn-mod options enabled:
+
+```luau
+local Params = {
+    RepoURL = "https://raw.githubusercontent.com/AnnonyA/Syn-mod/main/",
+    SSI = "saveinstance",
+}
+
+local synsaveinstance = loadstring(
+    game:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true),
+    Params.SSI
+)()
+
+local Options = {
+    mode = "optimized",
+    Compatibility = "auto",
+    ResumeOnCrash = true,
+    ResumeScope = "instance",
+    ResumeMaxSkips = 256,
+    SpecialProperties = "all",
+}
+
+synsaveinstance(Options)
+```
+
 ## Current changes
 
 The current experimental build includes:
