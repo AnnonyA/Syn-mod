@@ -55,6 +55,13 @@ require(
     and 'identify_executor and identify_executor()' not in SOURCE
     and 'execName, execVersion = identify_executor()' not in SOURCE,
 )
+require(
+    'executor metadata is normalized',
+    'type(name) ~= "string"' in SOURCE
+    and 'name = tostring(name)' in SOURCE
+    and 'type(version) ~= "string"' in SOURCE
+    and 'version = tostring(version)' in SOURCE,
+)
 
 # Post-save structural validation is opt-in and reports observations only.
 require('ValidateOutput default off', 'ValidateOutput = false' in SOURCE)
