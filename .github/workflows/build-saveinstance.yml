@@ -54,8 +54,6 @@ jobs:
           git apply patches/benchmark-observability-v2.patch
           git apply --check patches/post-save-validation-v1.patch
           git apply patches/post-save-validation-v1.patch
-          git apply --check patches/memory-streaming-v1.patch
-          git apply patches/memory-streaming-v1.patch
 
       - name: Run regression checks
         shell: bash
