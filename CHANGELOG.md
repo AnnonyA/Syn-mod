@@ -2,6 +2,21 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Executor identification guard
+
+### Executor compatibility
+
+- Calls to `identifyexecutor`, `getexecutorname`, or `whatexecutor` are now protected before Syn-mod uses their results.
+- Executors that expose an identification function but throw from it now fall back conservatively instead of aborting Syn-mod during startup or GHP compatibility-state initialization.
+- Successful executor identification keeps the existing name/version behavior; failure falls back to an empty display name and `UNKNOWN`/`0` for the persisted GHP compatibility key.
+- Serialized output formats, options, and the public saveinstance API are unchanged. No performance improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically at the unprotected executor-identification requirement.
+- Added the focused executor-identification guard patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Validation read-back fallback
 
 ### Validation and executor compatibility
