@@ -48,6 +48,12 @@ require('zstd fallback', 'compressionFallback' in SOURCE)
 require('appendfile capability', 'local hasAppendfile = appendfile ~= nil' in SOURCE)
 require('gethiddenproperty capability', 'local hasGetHiddenProperty = gethiddenproperty ~= nil' in SOURCE)
 require('getscriptbytecode capability', 'local hasGetScriptBytecode = getscriptbytecode ~= nil' in SOURCE)
+require(
+    'executor identification is protected',
+    'pcall(identify_executor)' in SOURCE
+    and 'identify_executor and identify_executor()' not in SOURCE
+    and 'execName, execVersion = identify_executor()' not in SOURCE,
+)
 
 # Post-save structural validation is opt-in and reports observations only.
 require('ValidateOutput default off', 'ValidateOutput = false' in SOURCE)
