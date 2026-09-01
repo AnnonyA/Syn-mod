@@ -6358,7 +6358,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			else
 				local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, report)
 				if ok then
-					pcall(writefile, validationFile, encoded)
+					local wrote = pcall(writefile, validationFile, encoded)
+					if not wrote then
+						warnings[#warnings + 1] = "Validation report write failed."
+					end
 				else
 					warnings[#warnings + 1] = "Validation report JSON encoding failed."
 				end
