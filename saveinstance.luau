@@ -107,7 +107,18 @@ end
 
 local identify_executor = identifyexecutor or getexecutorname or whatexecutor
 
-local EXECUTOR_NAME = identify_executor and identify_executor() or ""
+local function identifyExecutorSafe()
+	if not identify_executor then
+		return
+	end
+
+	local ok, name, version = pcall(identify_executor)
+	if ok then
+		return name, version
+	end
+end
+
+local EXECUTOR_NAME = identifyExecutorSafe() or ""
 
 local setrbxclipboard = global_container.setrbxclipboard
 
@@ -5261,12 +5272,12 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local GHPShadowed = true -- true when ghp returns the shadowed (parent) property value instead of the shadow
 
 	do
-		local execName, execVersion = "UNKNOWN", "0"
-		if identify_executor then
-			execName, execVersion = identify_executor()
-			if not execVersion then
-				execVersion = "0"
-			end
+		local execName, execVersion = identifyExecutorSafe()
+		if not execName then
+			execName = "UNKNOWN"
+		end
+		if not execVersion then
+			execVersion = "0"
 		end
 
 		GHPVersionKey = sanitizeFileName(execName)
