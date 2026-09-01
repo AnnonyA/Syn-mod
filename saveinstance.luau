@@ -6228,7 +6228,16 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		do
 			local tmp = { "<SharedStrings>" }
+			local sharedStringEntries = {}
 			for value, id in sharedStrings do
+				sharedStringEntries[#sharedStringEntries + 1] = { id, value }
+			end
+			table.sort(sharedStringEntries, function(a, b)
+				return a[1] < b[1]
+			end)
+
+			for _, entry in sharedStringEntries do
+				local id, value = entry[1], entry[2]
 				table.insert(tmp, '<SharedString md5="' .. id .. '">' .. value .. "</SharedString>")
 			end
 
