@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Validation report write warning
+
+### Validation diagnostics
+
+- `ValidationFile` persistence now checks the protected `writefile` call instead of silently discarding its result.
+- When an executor rejects the validation-report write, the returned validation report now includes `Validation report write failed.` in `warnings`.
+- The saved place/model validation result, serialized output format, options, and public saveinstance API are unchanged.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because the write-failure warning was absent.
+- Added the focused validation-report persistence patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Recovery file-probe guard
 
 ### Recovery and executor compatibility
