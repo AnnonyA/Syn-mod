@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — GHP compatibility state preservation
+
+### Reliability
+
+- Preserve previously learned `gethiddenproperty` compatibility profiles for other executor/client version keys when the current profile is updated.
+- Keep the existing per-version isolation and current-profile behavior unchanged; only the persistence merge behavior changed.
+- Continue treating unreadable or invalid state files conservatively by starting from an empty in-memory store.
+
+### Verification
+
+- Added the regression contract before the implementation and confirmed it failed on the previous build.
+- Added the focused persistence patch after the existing Memory/Streaming v1 patch in the reproducible build chain.
+- Verified clean patch reconstruction, the full regression suite, and pinned Luau compilation on the feature branch.
+
 ## 2026-09-01 — Memory/Streaming v1
 
 ### Write buffering
@@ -58,7 +72,7 @@ All entries below describe **Syn-mod experimental changes only**. They are not u
 - Added executor metadata and completion-rate reporting.
 - Disabled Syn-mod Metrics during measured timing runs so instrumentation does not bias upstream-vs-Syn-mod timing.
 - Added a separate optional Syn-mod diagnostic run with Metrics enabled; it is excluded from comparison statistics.
-- Added `bench/analyze.py` to convert benchmark JSON into measurement-quality warnings and candidate-hotspot rankings without automatic superiority claims.
+- Added `bench/analyze.py` to convert benchmark JSON into a measurement-quality and hotspot report without automatic superiority claims.
 
 ### Observability and hot paths
 
