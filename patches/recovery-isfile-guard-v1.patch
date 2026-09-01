@@ -1,0 +1,17 @@
+diff --git a/saveinstance.luau b/saveinstance.luau
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -4744,7 +4744,12 @@
+ 		end
+ 
+ 		local previous
+-		if not OPTIONS.ClearResumeState and isfile(ResumeFile) then
++		local resumeFileExists = false
++		if not OPTIONS.ClearResumeState then
++			local ok, exists = pcall(isfile, ResumeFile)
++			resumeFileExists = ok and exists == true
++		end
++		if resumeFileExists then
+ 			local ok, raw = pcall(readfile, ResumeFile)
+ 			if ok and type(raw) == "string" then
+ 				local decodedOk, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, raw)
