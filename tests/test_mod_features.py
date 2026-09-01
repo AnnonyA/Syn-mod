@@ -48,6 +48,16 @@ require('class scope available', 'if ResumeScope == "instance" then' in SOURCE)
 require('checkpoint before risky read', 'resumeBeforeRiskyRead(instance, PropertyName, ValueType)' in SOURCE)
 require('checkpoint after risky read', 'resumeAfterRiskyRead()' in SOURCE)
 
+# gethiddenproperty compatibility state should preserve profiles for other executor/client versions.
+require('GHP state store', 'local GHPStateStore = {}' in SOURCE)
+require('GHP state store loads decoded profiles', 'GHPStateStore = decoded' in SOURCE)
+require('GHP current profile loaded from store', 'GHPPersisted = GHPStateStore[GHPVersionKey]' in SOURCE)
+require('GHP current profile merged before save', 'GHPStateStore[GHPVersionKey] = GHPPersisted' in SOURCE)
+require(
+    'GHP save preserves other profiles',
+    'JSONEncode(GHPStateStore)' in SOURCE and 'JSONEncode({ [GHPVersionKey] = GHPPersisted })' not in SOURCE,
+)
+
 # Integer operations and shallow copies
 require('splitU64 floor division', 'local hi = v // 4294967296' in SOURCE)
 require('i64 high floor division', 'local high = (raw - low) // 0x100000000' in SOURCE)
