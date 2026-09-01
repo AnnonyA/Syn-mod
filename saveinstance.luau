@@ -4198,7 +4198,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		local metricsFile = OPTIONS.MetricsFile
 		if type(metricsFile) == "string" and writefile then
-			pcall(writefile, metricsFile, service.HttpService:JSONEncode(MetricsReport))
+			local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, MetricsReport)
+			if ok then
+				pcall(writefile, metricsFile, encoded)
+			end
 		end
 
 		return MetricsReport
