@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — README executor identification guard
+
+### Executor compatibility
+
+- README metadata generation now uses the protected executor-identification path instead of directly invoking `identifyexecutor`, `getexecutorname`, or `whatexecutor`.
+- Executors whose identification API throws can now continue the default `ReadMe = true` save path; README metadata falls back to `Unknown`.
+- Successful executor name/version formatting, serialized output formats, options, and the public saveinstance API are unchanged. No performance improvement is claimed.
+
+### Verification
+
+- Strengthened the regression requirement first and confirmed the previous generated build failed specifically because README metadata still called the executor identifier directly.
+- Added a focused README metadata patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Executor identification guard
 
 ### Executor compatibility
