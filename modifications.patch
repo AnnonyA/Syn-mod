@@ -1,0 +1,443 @@
+--- saveinstance.luau
++++ saveinstance.luau
+@@ -1,6 +1,22 @@
+ --!native
+ --!optimize 2
+ --!divine-intellect
++
++--[[
++    Syn-mod experimental build
++
++    Upstream/source: UniversalSynSaveInstance
++    https://github.com/luau/UniversalSynSaveInstance
++
++    This repository is an experimental modification used for testing and research.
++    We do not claim ownership of UniversalSynSaveInstance or its original code.
++    All rights, credits, and applicable licensing terms for upstream code remain
++    with the original authors and respective rights holders.
++
++    Changes in this build are experimental and are not presented as official
++    UniversalSynSaveInstance changes.
++]]
++
+ -- https://discord.gg/wx4ThpAsmw
+ 
+ local function string_find(s, pattern, init)
+@@ -457,7 +473,7 @@
+ end
+ 
+ local function splitU64(v)
+-	local hi = math.floor(v / 4294967296)
++	local hi = v // 4294967296
+ 	return hi, v - hi * 4294967296
+ end
+ 
+@@ -725,7 +741,7 @@
+ 	end,
+ 	_writeI64LE = function(b, offset, raw)
+ 		local low = bit32.band(raw, 0xFFFFFFFF)
+-		local high = (raw - low) / 0x100000000
++		local high = (raw - low) // 0x100000000
+ 
+ 		buffer.writei32(b, offset, low)
+ 		buffer.writei32(b, offset + 4, high)
+@@ -3583,6 +3599,10 @@
+ --- @field IgnoreNotArchivable boolean -- Ignores the Archivable property and saves Non-Archivable instances. ___Default:___ true
+ --- @field IgnorePropertiesOfNotScriptsOnScriptsMode boolean -- Ignores property of every instance that is not a script in "scripts" mode. ___Default:___ false
+ --- @field IgnoreSpecialProperties boolean -- Prevents calls to `gethiddenproperty` and uses fallback methods instead. This also helps with crashes. If your file is corrupted after saving, you can try turning this on. ___Default:___ false
++--- @field SpecialProperties {boolean|string|table} -- Selects which API-dump properties marked as Special are saved. `"all"`/true preserves the old behavior, `"none"`/false skips all Special properties, a string saves one property name, and a table can contain global property names plus class-specific lists such as `{ "AttributesSerialize", MeshPart = { "PhysicsData" } }`. This is independent from IgnoreSpecialProperties: this option chooses *what* to save, while IgnoreSpecialProperties chooses *how* special values are read. ___Default:___ `"all"`
++--- @field ResumeOnCrash boolean -- Enables durable crash recovery checkpoints for risky property reads. If a prior run ended while reading a property, the next run starts a fresh serialization and skips that exact ClassName/PropertyName crash point instead of repeatedly crashing. Works with XML and Binary because it never tries to append to a half-built serializer state. ___Default:___ false
++--- @field ResumeFile {boolean|string} -- Optional checkpoint JSON path used by ResumeOnCrash. `false` chooses a per-place default file in the executor workspace. ___Default:___ false
++--- @field ClearResumeState boolean -- Clears learned crash-skip points at the start of this run before ResumeOnCrash begins tracking again. ___Default:___ false
+ --- @field IsolateStarterPlayer boolean -- Saves StarterPlayer as separate folder, children of the original instance will be ignored. ___Default:___ false
+ --- @field IsolatePlayers boolean -- Saves All Players as separate folder, children of the original instance will be ignored. ___Default:___ false
+ --- @field IsolateLocalPlayer boolean -- Saves LocalPlayer as separate folder, original instance will be ignored. ___Default:___ false
+@@ -3717,6 +3737,11 @@
+ 		IgnoreNotArchivable = true,
+ 		IgnorePropertiesOfNotScriptsOnScriptsMode = false,
+ 		IgnoreSpecialProperties = false,
++		SpecialProperties = "all",
++
++		ResumeOnCrash = false,
++		ResumeFile = false,
++		ClearResumeState = false,
+ 
+ 		IsolateLocalPlayer = false, --  #service.StarterGui:GetChildren() == 0
+ 		IsolateLocalPlayerCharacter = false,
+@@ -3788,6 +3813,66 @@
+ 			XML = "Binary",
+ 		},
+ 	}
++	-- Type-check CustomOptions before applying aliases/inversions. Most options
++	-- use the type of their default; union/sentinel options are listed here.
++	local OPTION_TYPE_OVERRIDES = {
++		__DEBUG_MODE = { boolean = true, ["function"] = true },
++		Anonymous = { boolean = true, table = true },
++		Callback = { boolean = true, ["function"] = true },
++		CompressionMode = { boolean = true, string = true },
++		FilePath = { boolean = true, string = true },
++		Object = { boolean = true, Instance = true },
++		ResumeFile = { boolean = true, string = true },
++		SpecialProperties = { boolean = true, string = true, table = true },
++	}
++
++	local function expectedOptionTypes(option)
++		local override = OPTION_TYPE_OVERRIDES[option]
++		if override then
++			return override
++		end
++
++		local default = OPTIONS[option]
++		return default ~= nil and { [typeof(default)] = true } or nil
++	end
++
++	local function optionTypeList(types)
++		local names = {}
++		for name in types do
++			names[#names + 1] = name
++		end
++		table.sort(names)
++		return table.concat(names, " | ")
++	end
++
++	local function validateOptionValue(option, value, suppliedKey)
++		local allowed = expectedOptionTypes(option)
++		local valueType = typeof(value)
++
++		if allowed and not allowed[valueType] then
++			error(string.format(
++				"Invalid type for saveinstance option %q (%s): expected %s, got %s",
++				tostring(suppliedKey), option, optionTypeList(allowed), valueType
++			), 3)
++		end
++
++		if option == "Callback" and value ~= false and valueType ~= "function" then
++			error("Callback must be false or a function", 3)
++		elseif option == "FilePath" and value ~= false and valueType ~= "string" then
++			error("FilePath must be false or a string", 3)
++		elseif option == "Object" and value ~= false and valueType ~= "Instance" then
++			error("Object must be false or an Instance", 3)
++		elseif option == "ResumeFile" and value ~= false and valueType ~= "string" then
++			error("ResumeFile must be false or a string", 3)
++		elseif option == "CompressionMode" and valueType == "string" and value ~= "zstd" and value ~= "lz4" then
++			error('CompressionMode string must be "zstd" or "lz4"', 3)
++		elseif option == "CompressionLevel" and (value < -7 or value > 22) then
++			error("CompressionLevel must be between -7 and 22", 3)
++		end
++
++		return value
++	end
++
+ 	local OPTIONS_lowercase, OptionsAliasesInverse_lowercase, CustomOptions_valid = {}, {}, {}
+ 
+ 	do
+@@ -3868,7 +3953,7 @@
+ 		if CustomOptions2 and type(CustomOptions2) == "table" then
+ 			local tmp = CustomOptions
+ 			local Type = typeof(tmp)
+-			CustomOptions = CustomOptions2
++			CustomOptions = table.clone(CustomOptions2)
+ 			if Type == "Instance" then
+ 				CustomOptions.Object = tmp
+ 			elseif Type == "table" and typeof(tmp[1]) == "Instance" then
+@@ -3887,6 +3972,10 @@
+ 				CustomOptions = {}
+ 			else
+ 				for key, value in CustomOptions do
++					if type(key) ~= "string" then
++						error("CustomOptions keys must be strings; got " .. typeof(key), 2)
++					end
++
+ 					local k = string.lower(key)
+ 
+ 					local option = OPTIONS_lowercase[k]
+@@ -3898,6 +3987,8 @@
+ 					end
+ 
+ 					if option then
++						validateOptionValue(option, value, key)
++
+ 						local finalValue
+ 						if invert then
+ 							finalValue = not value
+@@ -3916,6 +4007,27 @@
+ 			CustomOptions = {}
+ 		else
+ 			CustomOptions = {}
++		end
++	end
++
++	local function applyModePresets(mode)
++		mode = string.lower(mode)
++
++		-- Explicit CustomOptions always override mode defaults.
++		if mode == "full" then
++			if CustomOptions_valid.IgnoreDefaultProperties == nil then
++				OPTIONS.IgnoreDefaultProperties = false
++			end
++		elseif mode == "optimized" and CustomOptions_valid.IgnoreDefaultProperties == nil then
++			OPTIONS.IgnoreDefaultProperties = true
++		end
++
++		if mode == "scripts" then
++			if CustomOptions_valid.IgnorePropertiesOfNotScriptsOnScriptsMode == nil then
++				OPTIONS.IgnorePropertiesOfNotScriptsOnScriptsMode = true
++			end
++		elseif CustomOptions_valid.IgnorePropertiesOfNotScriptsOnScriptsMode == nil then
++			OPTIONS.IgnorePropertiesOfNotScriptsOnScriptsMode = false
+ 		end
+ 	end
+ 
+@@ -4081,9 +4193,7 @@
+ 		IsModel = true
+ 	end
+ 
+-	local IgnoreDefaultProperties = OPTIONS.IgnoreDefaultProperties
+-	local IgnoreNotArchivable = not OPTIONS.IgnoreNotArchivable
+-	local IgnorePropertiesOfNotScriptsOnScriptsMode = OPTIONS.IgnorePropertiesOfNotScriptsOnScriptsMode
++	local IgnoreDefaultProperties, IgnoreNotArchivable, IgnorePropertiesOfNotScriptsOnScriptsMode
+ 
+ 	local old_gethiddenproperty
+ 	if OPTIONS.IgnoreSpecialProperties and gethiddenproperty then
+@@ -4106,7 +4216,14 @@
+ 		OPTIONS.mode = "full"
+ 		Object = nil
+ 		IsModel = nil
+-	end
++	elseif Object and string.lower(OPTIONS.mode) == "optimized" then
++		OPTIONS.mode = "full"
++	end
++
++	applyModePresets(OPTIONS.mode)
++	IgnoreDefaultProperties = OPTIONS.IgnoreDefaultProperties
++	IgnoreNotArchivable = not OPTIONS.IgnoreNotArchivable
++	IgnorePropertiesOfNotScriptsOnScriptsMode = OPTIONS.IgnorePropertiesOfNotScriptsOnScriptsMode
+ 
+ 	local function isLuaSourceContainer(instance)
+ 		return instance:IsA("LuaSourceContainer")
+@@ -4263,6 +4380,162 @@
+ 			table.insert(ToSaveList, 1, Object)
+ 		end
+ 	end
++
++	local SpecialPropertiesOption = OPTIONS.SpecialProperties
++	local SpecialPropertiesMode = "selected"
++	local SpecialPropertiesGlobal = {}
++	local SpecialPropertiesByClass = {}
++
++	do
++		local optionType = typeof(SpecialPropertiesOption)
++		if SpecialPropertiesOption == true or SpecialPropertiesOption == "all" then
++			SpecialPropertiesMode = "all"
++		elseif SpecialPropertiesOption == false or SpecialPropertiesOption == "none" then
++			SpecialPropertiesMode = "none"
++		elseif optionType == "string" then
++			SpecialPropertiesGlobal[SpecialPropertiesOption] = true
++		elseif optionType == "table" then
++			for key, value in SpecialPropertiesOption do
++				if type(key) == "number" and type(value) == "string" then
++					SpecialPropertiesGlobal[value] = true
++				elseif type(key) == "string" and type(value) == "boolean" then
++					SpecialPropertiesGlobal[key] = value
++				elseif type(key) == "string" and type(value) == "table" then
++					SpecialPropertiesByClass[key] = arrayToDict(value)
++				end
++			end
++		end
++	end
++
++	local function specialPropertyAllowed(instance, propertyName)
++		if SpecialPropertiesMode == "all" then
++			return true
++		elseif SpecialPropertiesMode == "none" then
++			return false
++		end
++
++		local direct = SpecialPropertiesGlobal[propertyName]
++		if direct ~= nil then
++			return direct
++		end
++
++		local byClass = SpecialPropertiesByClass[instance.ClassName]
++		return byClass ~= nil and byClass[propertyName] == true
++	end
++
++	-- Clean-restart crash recovery: checkpoint only risky hidden-property reads.
++	-- On a hard crash, the next run learns that exact class/property and skips it.
++	local ResumeEnabled = OPTIONS.ResumeOnCrash and writefile ~= nil and readfile ~= nil and isfile ~= nil
++	local ResumeFile = OPTIONS.ResumeFile
++	if ResumeFile == false then
++		ResumeFile = "USSI_resume_" .. tostring(game.PlaceId) .. ".json"
++	end
++
++	local ResumeIdentity = table.concat({
++		tostring(game.PlaceId),
++		tostring(OPTIONS.mode),
++		Object and Object:GetFullName() or "game",
++	}, "|")
++	local ResumeState
++	local ResumeSkipMap = {}
++
++	local function resumePointKey(className, propertyName)
++		return className .. "\0" .. propertyName
++	end
++
++	local function persistResumeState()
++		if ResumeEnabled and ResumeState then
++			pcall(writefile, ResumeFile, service.HttpService:JSONEncode(ResumeState))
++		end
++	end
++
++	local function loadResumeState()
++		if not ResumeEnabled then
++			return
++		end
++
++		local previous
++		if not OPTIONS.ClearResumeState and isfile(ResumeFile) then
++			local ok, raw = pcall(readfile, ResumeFile)
++			if ok and type(raw) == "string" then
++				local decodedOk, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, raw)
++				if decodedOk and type(decoded) == "table" and decoded.identity == ResumeIdentity then
++					previous = decoded
++				end
++			end
++		end
++
++		local skipped = previous and type(previous.skipped) == "table" and table.clone(previous.skipped) or {}
++		if previous and previous.status == "reading" and type(previous.current) == "table" then
++			local current = previous.current
++			if current.class and current.property then
++				local key = resumePointKey(current.class, current.property)
++				local exists = false
++				for _, point in skipped do
++					if point.key == key then
++						exists = true
++						break
++					end
++				end
++				if not exists then
++					skipped[#skipped + 1] = { key = key, class = current.class, property = current.property, valueType = current.valueType }
++				end
++			end
++		end
++
++		for _, point in skipped do
++			if point.key then
++				ResumeSkipMap[point.key] = true
++			end
++		end
++
++		ResumeState = {
++			version = 1, identity = ResumeIdentity, targetFile = placename,
++			status = "resuming", current = nil, skipped = skipped, updatedAt = os.time(),
++		}
++		persistResumeState()
++	end
++
++	local function resumeShouldSkip(instance, propertyName)
++		return ResumeEnabled and ResumeSkipMap[resumePointKey(instance.ClassName, propertyName)] == true
++	end
++
++	local function resumeBeforeRiskyRead(instance, propertyName, valueType)
++		if not ResumeEnabled then return end
++		ResumeState.status = "reading"
++		ResumeState.current = {
++			key = resumePointKey(instance.ClassName, propertyName), class = instance.ClassName,
++			property = propertyName, valueType = valueType, instance = instance:GetFullName(),
++		}
++		ResumeState.updatedAt = os.time()
++		persistResumeState()
++	end
++
++	local function resumeAfterRiskyRead()
++		if not ResumeEnabled then return end
++		ResumeState.status = "safe"
++		ResumeState.current = nil
++		ResumeState.updatedAt = os.time()
++		persistResumeState()
++	end
++
++	local function markResumeWriting()
++		if not ResumeEnabled then return end
++		ResumeState.status = "writing"
++		ResumeState.current = nil
++		ResumeState.updatedAt = os.time()
++		persistResumeState()
++	end
++
++	local function markResumeComplete()
++		if not ResumeEnabled then return end
++		ResumeState.status = "complete"
++		ResumeState.current = nil
++		ResumeState.updatedAt = os.time()
++		persistResumeState()
++	end
++
++	loadResumeState()
+ 
+ 	local IsolateLocalPlayer = OPTIONS.IsolateLocalPlayer
+ 	local IsolateLocalPlayerCharacter = OPTIONS.IsolateLocalPlayerCharacter
+@@ -4726,6 +4999,14 @@
+ 		local PropertyName, ValueType, CanRead, Special =
+ 			property.Name, property.ValueType, property.CanRead, property.Special
+ 
++		if resumeShouldSkip(instance, PropertyName) then
++			return __BREAK
++		end
++
++		if Special and not specialPropertyAllowed(instance, PropertyName) then
++			return __BREAK
++		end
++
+ 		-- Hot path
+ 		if
+ 			Anonymizers == nil
+@@ -4763,7 +5044,9 @@
+ 				if property.Shadows and GHPShadowed then
+ 					property.CanRead = false
+ 				elseif gethiddenproperty and ghpDatatypeAllowed(GHPKey) then
++					resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+ 					local ok, result = pcall(gethiddenproperty, instance, PropertyName)
++					resumeAfterRiskyRead()
+ 					if ok then
+ 						raw = result
+ 					end
+@@ -4790,7 +5073,9 @@
+ 				if ok then
+ 					raw = result
+ 				elseif not (property.Shadows and GHPShadowed) and gethiddenproperty and ghpDatatypeAllowed(GHPKey) then
++					resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+ 					ok, result = pcall(gethiddenproperty, instance, PropertyName)
++					resumeAfterRiskyRead()
+ 					ghpDatatypeReport(GHPKey, ok and not filterPropVal(result, property, Category, Optional))
+ 					if ok then
+ 						raw = result
+@@ -4818,7 +5103,9 @@
+ 		end
+ 
+ 		if not GHPFFailed then
++			resumeBeforeRiskyRead(instance, PropertyName, ValueType)
+ 			local ok, result = pcall(gethiddenproperty_fallback, instance, PropertyName)
++			resumeAfterRiskyRead()
+ 			if result == nil and not nilIsValid(Category, Optional) then
+ 				ok = nil
+ 			end
+@@ -5856,6 +6143,8 @@
+ 			stampElapsed(chunks, os.clock() - elapse_t)
+ 		end
+ 
++		markResumeWriting()
++
+ 		if CopyToClipboard then
+ 			setrbxclipboard(table.concat(chunks))
+ 		elseif Callback then
+@@ -5917,6 +6206,8 @@
+ 				table.concat(chunks)
+ 			)
+ 		end
++
++		markResumeComplete()
+ 	end
+ 
+ 	local Connections = {}
