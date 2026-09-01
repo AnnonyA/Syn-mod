@@ -70,7 +70,7 @@ while i < n:
             i = end + len(close)
             continue
 
-    if c in ('"', "'):
+    if c in ('"', "'"):
         quote = c
         i += 1
         while i < n:
