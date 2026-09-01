@@ -1,0 +1,35 @@
+diff --git a/saveinstance.luau b/saveinstance.luau
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -5308,7 +5308,8 @@
+ 	local GHP_STATE_FILE = USSI_FOLDER .. "GHP_STATE.json"
+ 	local GHPDatatypeState = {}
++	local GHPStateStore = {}
+ 	local GHPPersisted = {}
+ 	local GHPVersionKey
+ 	local GHPShadowed = true -- true when ghp returns the shadowed (parent) property value instead of the shadow
+@@ -5330,8 +5331,11 @@
+ 		if readfile then
+ 			local ok, decoded = pcall(function()
+ 				return service.HttpService:JSONDecode(readfile(GHP_STATE_FILE))
+ 			end)
+-			if ok and type(decoded) == "table" and type(decoded[GHPVersionKey]) == "table" then
+-				GHPPersisted = decoded[GHPVersionKey]
++			if ok and type(decoded) == "table" then
++				GHPStateStore = decoded
++				if type(GHPStateStore[GHPVersionKey]) == "table" then
++					GHPPersisted = GHPStateStore[GHPVersionKey]
++				end
+ 			end
+ 		end
+ 	end
+@@ -5342,7 +5346,8 @@
+ 		if not writefile then
+ 			return
+ 		end
+-		pcall(writefile, GHP_STATE_FILE, service.HttpService:JSONEncode({ [GHPVersionKey] = GHPPersisted }))
++		GHPStateStore[GHPVersionKey] = GHPPersisted
++		pcall(writefile, GHP_STATE_FILE, service.HttpService:JSONEncode(GHPStateStore))
+ 	end
+ 
+ 	local function ghpDatatypeAllowed(valueType)

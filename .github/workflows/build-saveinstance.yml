@@ -56,6 +56,8 @@ jobs:
           git apply patches/post-save-validation-v1.patch
           git apply --check patches/memory-streaming-v1.patch
           git apply patches/memory-streaming-v1.patch
+          git apply --check patches/ghp-state-preserve-v1.patch
+          git apply patches/ghp-state-preserve-v1.patch
 
       - name: Run regression checks
         shell: bash
