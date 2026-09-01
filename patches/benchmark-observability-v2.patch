@@ -222,4 +222,4 @@
 +		if CompatibilityStrictErrors and #CompatibilityStrictErrors > 0 then
  			local message = "Compatibility strict mode: " .. table.concat(CompatibilityStrictErrors, "; ")
  			Cleanup()
- 	BBBYš[˜[^™SY]šXÜÊ˜[ÙKY\ÜØYÙJB
+ 			finalizeMetrics(false, message)
