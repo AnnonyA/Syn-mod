@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Validation write capability check
+
+### Structural validation reliability
+
+- File-target validation now records whether `writefile` is available and cannot report `valid = true` when no file-write capability exists.
+- Clipboard and callback targets are unchanged; this check only affects normal file targets.
+- Serialized output formats, options, and the public saveinstance API are unchanged. No performance or fidelity improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because file-target validation did not require write capability.
+- Added a focused validation patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Metrics file encoding guard
 
 ### Metrics integration reliability
