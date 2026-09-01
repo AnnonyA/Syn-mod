@@ -2,6 +2,26 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Post-save validation v1
+
+### Structural validation
+
+- Added opt-in `ValidateOutput` post-save validation.
+- Added `ValidationCallback` and `ValidationFile`; either option automatically enables validation.
+- Added Binary envelope checks for the expected file header and final `END` chunk.
+- Added XML envelope checks for the opening Roblox element and closing `</roblox>` marker.
+- Added generated-chunk byte accounting so the summed chunk size is checked against the expected output size.
+- Added optional `isfile`/`readfile` read-back checks for normal file output, including file existence, readability, and final byte-size matching when those APIs are available.
+- Added the validation report to Metrics when both features are enabled.
+- Prevented `ValidationFile` from overwriting the saved place/model when both paths are identical.
+- Validation reports explicitly describe their scope as structural and do not claim Roblox Studio loadability or complete property fidelity.
+
+### Verification
+
+- Added validation feature-contract regression checks before the implementation.
+- Kept validation disabled by default so normal saves do not pay validation/read-back costs.
+- Added the focused validation patch to the reproducible build chain and verified it with the existing Luau compilation workflow.
+
 ## 2026-09-01 — Benchmark v2 and deeper observability
 
 ### Fairer benchmark measurements
