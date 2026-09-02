@@ -1,7 +1,7 @@
 diff --git a/saveinstance.luau b/saveinstance.luau
 --- a/saveinstance.luau
 +++ b/saveinstance.luau
-@@ -1,5 +1,8 @@
+@@ -4766,5 +4766,8 @@
  	local function persistResumeState()
  		if ResumeEnabled and ResumeState then
 -			pcall(writefile, ResumeFile, service.HttpService:JSONEncode(ResumeState))
