@@ -29,6 +29,10 @@ require('decompile attempt counter', 'decompileAttempted' in SOURCE)
 require('decompile success counter', 'decompileSucceeded' in SOURCE)
 require('decompile failure counter', 'decompileFailed' in SOURCE)
 require('decompile cache stores successes only', 'if ScriptCache and bytecode and ok then' in SOURCE)
+require(
+    'LinkedSource JSON error probing checks decoded type',
+    'if o and type(r) == "table" and r.errors then' in SOURCE,
+)
 require('instance counter', 'instancesCollected' in SOURCE)
 require('output bytes metric', 'outputBytes' in SOURCE)
 require(
