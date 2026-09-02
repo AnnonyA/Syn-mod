@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-02 — LinkedSource JSON type guard
+
+### Script recovery reliability
+
+- LinkedSource response filtering now checks that decoded JSON is a table before probing its `errors` field.
+- Valid JSON scalar or `null` responses from asset delivery can no longer raise an indexing error inside the LinkedSource filter and abort the save path; only decoded error objects are rejected as before.
+- Successful LinkedSource extraction, script/decompile caching, serialized output formats, options, and the public saveinstance API are unchanged. No performance or fidelity improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because LinkedSource JSON error probing did not guard the decoded value type.
+- Added a focused LinkedSource filtering patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Final validation callback report
 
 ### Validation integration reliability
