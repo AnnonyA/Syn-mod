@@ -86,6 +86,8 @@ jobs:
           git apply patches/ghp-json-encode-guard-v1.patch
           git apply --check patches/validation-callback-final-report-v1.patch
           git apply patches/validation-callback-final-report-v1.patch
+          git apply --check patches/linkedsource-json-type-guard-v1.patch
+          git apply patches/linkedsource-json-type-guard-v1.patch
 
       - name: Run regression checks
         shell: bash
