@@ -82,6 +82,8 @@ jobs:
           git apply patches/validation-write-capability-v1.patch
           git apply --check patches/recovery-json-encode-guard-v1.patch
           git apply patches/recovery-json-encode-guard-v1.patch
+          git apply --check patches/ghp-json-encode-guard-v1.patch
+          git apply patches/ghp-json-encode-guard-v1.patch
 
       - name: Run regression checks
         shell: bash
