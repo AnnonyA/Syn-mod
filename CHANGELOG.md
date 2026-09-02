@@ -131,6 +131,7 @@ All entries below describe **Syn-mod experimental changes only**. They are not u
 - Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and Actions-generated `saveinstance.luau` before publishing.
 
 ## 2026-09-01 — Recovery file-probe guard
+
 ### Recovery and executor compatibility
 
 - Crash-recovery startup now protects the `isfile(ResumeFile)` probe with `pcall` before attempting to read a previous checkpoint.
