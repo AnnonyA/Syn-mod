@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Recovery state encoding guard
+
+### Recovery reliability
+
+- Crash-recovery checkpoint JSON encoding is now protected before the encoded state is handed to `writefile`.
+- If `HttpService:JSONEncode` fails while persisting recovery state, Syn-mod skips that checkpoint write instead of letting the encoding exception abort the save.
+- Normal serializable recovery checkpoints, recovery-state format, options, serialized output, and the public saveinstance API are unchanged. No performance or fidelity improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because recovery-state JSON encoding was unprotected.
+- Added a focused recovery persistence patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Validation write capability check
 
 ### Structural validation reliability
