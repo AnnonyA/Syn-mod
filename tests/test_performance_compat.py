@@ -72,6 +72,11 @@ require(
     and 'type(version) ~= "string"' in SOURCE
     and 'pcall(tostring, version)' in SOURCE,
 )
+require(
+    'GHP state JSON encoding is protected',
+    'pcall(service.HttpService.JSONEncode, service.HttpService, GHPStateStore)' in SOURCE
+    and 'pcall(writefile, GHP_STATE_FILE, service.HttpService:JSONEncode(GHPStateStore))' not in SOURCE,
+)
 
 # Post-save structural validation is opt-in and reports observations only.
 require('ValidateOutput default off', 'ValidateOutput = false' in SOURCE)
