@@ -43,6 +43,11 @@ require('cached recovery key helper', 'local function resumePointFor' in SOURCE)
 require('recovery skip removed from default hot path', 'if ResumeEnabled and resumeShouldSkip(instance, PropertyName) then' in SOURCE)
 require('recovery identity lazy', 'local ResumeIdentity = ResumeEnabled and table.concat({' in SOURCE and 'Object and resumeInstancePath(Object) or "game"' in SOURCE)
 require('skip lookup uses prebuilt point', 'local point = resumePointFor(instance, propertyName)' in SOURCE)
+require(
+    'recovery state JSON encoding is protected',
+    'pcall(service.HttpService.JSONEncode, service.HttpService, ResumeState)' in SOURCE
+    and 'pcall(writefile, ResumeFile, service.HttpService:JSONEncode(ResumeState))' not in SOURCE,
+)
 
 # Compatibility profile is explicit and conservative.
 require('Compatibility default auto', 'Compatibility = "auto"' in SOURCE)
