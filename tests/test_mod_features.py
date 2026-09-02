@@ -59,7 +59,8 @@ require('GHP current profile loaded from store', 'GHPPersisted = GHPStateStore[G
 require('GHP current profile merged before save', 'GHPStateStore[GHPVersionKey] = GHPPersisted' in SOURCE)
 require(
     'GHP save preserves other profiles',
-    'JSONEncode(GHPStateStore)' in SOURCE and 'JSONEncode({ [GHPVersionKey] = GHPPersisted })' not in SOURCE,
+    'pcall(service.HttpService.JSONEncode, service.HttpService, GHPStateStore)' in SOURCE
+    and 'JSONEncode({ [GHPVersionKey] = GHPPersisted })' not in SOURCE,
 )
 
 # Integer operations and shallow copies
