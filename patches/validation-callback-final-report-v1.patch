@@ -1,0 +1,27 @@
+diff --git a/saveinstance.luau b/saveinstance.luau
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -6390,11 +6390,6 @@
+ 
+ 		report.valid = valid == true
+ 
+-		local validationCallback = OPTIONS.ValidationCallback
+-		if type(validationCallback) == "function" then
+-			pcall(validationCallback, report)
+-		end
+-
+ 		local validationFile = OPTIONS.ValidationFile
+ 		if type(validationFile) == "string" and writefile then
+ 			if fileTarget and validationFile == placename then
+@@ -6414,6 +6409,11 @@
+ 			end
+ 		end
+ 
++		local validationCallback = OPTIONS.ValidationCallback
++		if type(validationCallback) == "function" then
++			pcall(validationCallback, report)
++		end
++
+ 		return report
+ 	end
+ 
