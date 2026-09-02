@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — GHP state encoding guard
+
+### Executor compatibility reliability
+
+- `gethiddenproperty` compatibility-state JSON encoding is now protected before the encoded store is handed to `writefile`.
+- If `HttpService:JSONEncode` fails while persisting learned compatibility state, Syn-mod skips that state-file write instead of letting the encoding exception abort the save.
+- Normal serializable compatibility profiles, per-version profile preservation, serialized output formats, options, and the public saveinstance API are unchanged. No performance or fidelity improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because GHP-state JSON encoding was unprotected.
+- Added a focused compatibility-state persistence patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — Recovery state encoding guard
 
 ### Recovery reliability
@@ -117,7 +131,6 @@ All entries below describe **Syn-mod experimental changes only**. They are not u
 - Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and Actions-generated `saveinstance.luau` before publishing.
 
 ## 2026-09-01 — Recovery file-probe guard
-
 ### Recovery and executor compatibility
 
 - Crash-recovery startup now protects the `isfile(ResumeFile)` probe with `pcall` before attempting to read a previous checkpoint.
