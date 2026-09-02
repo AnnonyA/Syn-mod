@@ -5148,7 +5148,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local function filterLinkedSource(str)
 		local o, r = pcall(service.HttpService.JSONDecode, service.HttpService, str)
-		if o and r.errors then
+		if o and type(r) == "table" and r.errors then
 			return
 		end
 		return true
