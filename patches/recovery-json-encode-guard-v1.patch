@@ -1,0 +1,13 @@
+diff --git a/saveinstance.luau b/saveinstance.luau
+--- a/saveinstance.luau
++++ b/saveinstance.luau
+@@ -1,6 +1,9 @@
+ 	local function persistResumeState()
+ 		if ResumeEnabled and ResumeState then
+-			pcall(writefile, ResumeFile, service.HttpService:JSONEncode(ResumeState))
++			local encodedOk, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, ResumeState)
++			if encodedOk then
++				pcall(writefile, ResumeFile, encoded)
++			end
+ 		end
+ 	end
