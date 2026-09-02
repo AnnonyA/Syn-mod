@@ -4765,7 +4765,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local function persistResumeState()
 		if ResumeEnabled and ResumeState then
-			pcall(writefile, ResumeFile, service.HttpService:JSONEncode(ResumeState))
+			local encodedOk, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, ResumeState)
+			if encodedOk then
+				pcall(writefile, ResumeFile, encoded)
+			end
 		end
 	end
 
