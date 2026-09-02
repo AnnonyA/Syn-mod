@@ -6387,11 +6387,6 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		report.valid = valid == true
 
-		local validationCallback = OPTIONS.ValidationCallback
-		if type(validationCallback) == "function" then
-			pcall(validationCallback, report)
-		end
-
 		local validationFile = OPTIONS.ValidationFile
 		if type(validationFile) == "string" and writefile then
 			if fileTarget and validationFile == placename then
@@ -6407,6 +6402,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 					warnings[#warnings + 1] = "Validation report JSON encoding failed."
 				end
 			end
+		end
+
+		local validationCallback = OPTIONS.ValidationCallback
+		if type(validationCallback) == "function" then
+			pcall(validationCallback, report)
 		end
 
 		return report
