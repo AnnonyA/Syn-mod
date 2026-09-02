@@ -5326,7 +5326,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			return
 		end
 		GHPStateStore[GHPVersionKey] = GHPPersisted
-		pcall(writefile, GHP_STATE_FILE, service.HttpService:JSONEncode(GHPStateStore))
+		local encodedOk, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, GHPStateStore)
+		if not encodedOk then
+			return
+		end
+		pcall(writefile, GHP_STATE_FILE, encoded)
 	end
 
 	local function ghpDatatypeAllowed(valueType)
