@@ -2,6 +2,20 @@
 
 All entries below describe **Syn-mod experimental changes only**. They are not upstream UniversalSynSaveInstance release notes.
 
+## 2026-09-01 — Final validation callback report
+
+### Validation integration reliability
+
+- `ValidationCallback` now runs after optional `ValidationFile` persistence has finished.
+- Callback consumers therefore receive the final validation report, including warnings produced when the validation report cannot be encoded or written, or when `ValidationFile` matches the saved output path.
+- Structural validation checks, serialized output formats, options, and the public saveinstance API are unchanged. No performance or fidelity improvement is claimed.
+
+### Verification
+
+- Added the regression requirement first and confirmed the previous generated build failed specifically because the callback ran before validation-report persistence completed.
+- Added a focused callback-ordering patch at the end of the pinned-upstream reconstruction chain.
+- Verified clean patch reconstruction, the full regression suite, pinned Luau compilation, and the Actions-generated `saveinstance.luau` before publishing.
+
 ## 2026-09-01 — GHP state encoding guard
 
 ### Executor compatibility reliability
